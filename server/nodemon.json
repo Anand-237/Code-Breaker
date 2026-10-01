@@ -1,0 +1,17 @@
+{
+  "ignore": [
+    "data/*",
+    "data/**",
+    "users_backup.json"
+  ],
+  "watch": [
+    "index.js",
+    "controllers",
+    "models",
+    "routes",
+    "middleware",
+    "utils",
+    "seed"
+  ],
+  "ext": "js,mjs,cjs"
+}
