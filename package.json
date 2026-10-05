@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "npm --prefix client run dev",
     "build": "npm --prefix client run build",
+    "check-db": "node server/scripts/check_firebase_data.js",
     "test": "echo \"No test suite specified\" && exit 0",
     "preview": "npm --prefix client run preview"
   },
