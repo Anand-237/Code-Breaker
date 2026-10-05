@@ -95,7 +95,10 @@ function initFirebase() {
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
     try {
       let serviceAccount;
-      const rawKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY.trim();
+      let rawKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY.trim();
+      if ((rawKey.startsWith('"') && rawKey.endsWith('"')) || (rawKey.startsWith("'") && rawKey.endsWith("'"))) {
+        rawKey = rawKey.slice(1, -1).trim();
+      }
       if (rawKey.startsWith('{')) {
         serviceAccount = JSON.parse(rawKey);
       } else if (fs.existsSync(rawKey)) {
@@ -103,6 +106,10 @@ function initFirebase() {
       } else {
         const decoded = Buffer.from(rawKey, 'base64').toString('utf-8');
         serviceAccount = JSON.parse(decoded);
+      }
+
+      if (serviceAccount.private_key) {
+        serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
       }
 
       if (admin.apps.length === 0) {
