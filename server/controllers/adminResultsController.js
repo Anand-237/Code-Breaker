@@ -36,13 +36,17 @@ const getResults = async (req, res) => {
 
     submissions.forEach((sub) => {
       if (!sub.userId) return;
-      const uid = sub.userId._id.toString();
+      const uid = String(sub.userId._id || sub.userId.id || sub.userId);
+      const uName = typeof sub.userId === 'object' ? sub.userId.name : '';
+      const uUsername = typeof sub.userId === 'object' ? sub.userId.username : '';
+      const uTeam = typeof sub.userId === 'object' ? (sub.userId.teamName || sub.userId.name || sub.userId.username) : '';
+
       if (!userMap[uid]) {
         userMap[uid] = {
-          userId: sub.userId._id,
-          name: sub.userId.name,
-          username: sub.userId.username,
-          teamName: sub.userId.teamName || sub.userId.name || sub.userId.username,
+          userId: uid,
+          name: uName,
+          username: uUsername,
+          teamName: uTeam || uUsername || 'Unknown',
           rounds: [],
           roundScores: { 1: 0, 2: 0, 3: 0 },
           cumulative: 0,
@@ -55,7 +59,7 @@ const getResults = async (req, res) => {
         score: sub.totalScore,
         status: sub.status,
         submittedAt: sub.submittedAt,
-        submissionId: sub._id,
+        submissionId: sub._id || sub.id,
       });
       userMap[uid].cumulative += sub.totalScore;
       if (sub.submittedAt) {

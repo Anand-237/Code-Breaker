@@ -1,53 +1,6 @@
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
-const mongoose = require('mongoose');
-
-const questionSchema = new mongoose.Schema(
-  {
-    round: Number,
-    questionType: String,
-    title: String,
-    questionText: String,
-    options: [String],
-    correctOptionIndex: Number,
-    correctAnswer: String,
-    codeSnippet: String,
-    codeSnippetPython: String,
-    java: {
-      code: String,
-      correctCode: String,
-      answer: String,
-      input: String,
-      hiddenInput: String,
-      hiddenAnswer: String,
-      hiddenInput2: String,
-      hiddenAnswer2: String,
-    },
-    python: {
-      code: String,
-      correctCode: String,
-      answer: String,
-      input: String,
-      hiddenInput: String,
-      hiddenAnswer: String,
-      hiddenInput2: String,
-      hiddenAnswer2: String,
-    },
-    testInput: String,
-    hiddenInput: String,
-    hiddenExpectedOutput: String,
-    buggyCode: String,
-    language: String,
-    correctOutput: String,
-    expectedOutput: String,
-    marks: Number,
-    points: Number,
-    order: Number,
-    isActive: Boolean,
-  },
-  { timestamps: true }
-);
-
-const Question = mongoose.model('Question', questionSchema);
+const { initFirebase } = require('../config/firebase');
+const Question = require('../models/Question');
 
 const round3Questions = [
   {
@@ -1205,38 +1158,7 @@ print("".join(stack))`,
 ];
 
 async function updateDB() {
-  const path = require('path');
-  const fs = require('fs');
-  let connected = false;
-
-  if (process.env.MONGODB_URI && process.env.MONGODB_URI !== 'memory') {
-    try {
-      console.log('Connecting to:', process.env.MONGODB_URI);
-      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 2000 });
-      connected = true;
-    } catch (e) {
-      console.warn('Primary MONGODB_URI connection failed, trying local data directory...');
-    }
-  }
-
-  if (!connected) {
-    const dataDir = path.join(__dirname, '../data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    const { MongoMemoryServer } = require('mongodb-memory-server');
-    const mongoServer = await MongoMemoryServer.create({
-      instance: {
-        dbPath: dataDir,
-        storageEngine: 'wiredTiger',
-        keepData: true,
-        dbName: 'code-breakers',
-      },
-    });
-    const uri = mongoServer.getUri('code-breakers');
-    await mongoose.connect(uri);
-    console.log('Connected to local storage database.');
-  }
+  initFirebase();
 
   const deleteRes = await Question.deleteMany({ round: 3 });
   console.log('Deleted old Round 3 questions count:', deleteRes.deletedCount);
@@ -1248,9 +1170,7 @@ async function updateDB() {
   const r2Count = await Question.countDocuments({ round: 2 });
   const r3Count = await Question.countDocuments({ round: 3 });
 
-  console.log(`CURRENT DB STATS:\nRound 1: ${r1Count}\nRound 2: ${r2Count}\nRound 3: ${r3Count}`);
-
-  await mongoose.disconnect();
+  console.log(`CURRENT FIREBASE STATS:\nRound 1: ${r1Count}\nRound 2: ${r2Count}\nRound 3: ${r3Count}`);
 }
 
 updateDB().catch(console.error);

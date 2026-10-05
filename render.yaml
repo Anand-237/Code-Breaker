@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: aidex-code-breakers
+    env: docker
+    plan: free
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        value: codebreakers_secret_key_2026
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false

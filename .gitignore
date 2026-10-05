@@ -15,6 +15,14 @@ server/data_*/
 server/.env
 client/.env
 
+# Firebase service account keys & secrets
+*firebase-adminsdk*.json
+*serviceAccountKey*.json
+*firebase-key*.json
+*service_account*.json
+codebreaker-*.json
+serviceAccountKey.json
+
 # Build outputs
 dist/
 build/

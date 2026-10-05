@@ -1,5 +1,4 @@
 const jwt = require('jsonwebtoken');
-const mongoose = require('mongoose');
 const User = require('../models/User');
 const { normalizeUsername } = require('../utils/normalize');
 
@@ -16,11 +15,6 @@ const generateToken = (id) => {
 const login = async (req, res) => {
   try {
     const { username, password } = req.body;
-
-    if (mongoose.connection.readyState === 0) {
-      console.error('[AUTH] Database disconnected!');
-      return res.status(500).json({ message: 'Database connection failed. Please configure MONGODB_URI in Vercel Environment Variables.' });
-    }
 
     // Validate input
     const normalizedUsername = normalizeUsername(username);

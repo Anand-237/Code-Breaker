@@ -1,5 +1,5 @@
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
-const mongoose = require('mongoose');
+const { initFirebase } = require('../config/firebase');
 const User = require('../models/User');
 const Question = require('../models/Question');
 const RoundControl = require('../models/RoundControl');
@@ -7,16 +7,7 @@ const { restoreUserBackup, saveUserBackup } = require('../utils/userBackup');
 
 const seed = async () => {
   try {
-    if (mongoose.connection.readyState === 0) {
-      if (process.env.MONGODB_URI) {
-        try {
-          await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 3000 });
-        } catch (err) {
-          console.warn('  Standalone seed could not connect to remote MONGODB_URI. Seed will run on server startup automatically.');
-          return;
-        }
-      }
-    }
+    initFirebase();
 
     // ─── Restore any backed up users first ─────────────────────────────────────
     await restoreUserBackup();

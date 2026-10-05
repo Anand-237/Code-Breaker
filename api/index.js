@@ -1,53 +1,35 @@
 const app = require('../server/index.js');
-const mongoose = require('mongoose');
+const { initFirebase } = require('../server/config/firebase.js');
+const { restoreUserBackup } = require('../server/utils/userBackup.js');
+const { restoreSubmissionBackup } = require('../server/utils/submissionBackup.js');
 const seed = require('../server/seed/seed.js');
 
-let isConnected = false;
-let isSeeded = false;
+let isInitialized = false;
 
-async function connectToDatabase() {
-  // Already connected — skip
-  if (isConnected && mongoose.connection.readyState >= 1) {
-    return;
-  }
-
-  const uri = process.env.MONGODB_URI;
-
-  if (!uri) {
-    console.error(' MONGODB_URI environment variable is not set. Please add it in Vercel Project Settings → Environment Variables.');
-    return;
-  }
-
-  if (mongoose.connection.readyState >= 1) {
-    isConnected = true;
-    return;
-  }
+async function setupDatabase() {
+  if (isInitialized) return;
 
   try {
-    console.log(' Connecting to MongoDB Atlas in Vercel serverless function...');
-    await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 8000,
-      socketTimeoutMS: 45000,
-    });
-    isConnected = true;
-    console.log(' Connected to MongoDB Atlas successfully in Vercel!');
+    initFirebase();
+    await restoreUserBackup();
+    await restoreSubmissionBackup();
+    await seed();
+    isInitialized = true;
+    console.log('Firebase Firestore & Seed initialization complete for serverless function.');
   } catch (err) {
-    isConnected = false;
-    console.error(' MongoDB connection error in Vercel:', err.message);
-    return;
-  }
-
-  if (isConnected && !isSeeded) {
-    try {
-      await seed();
-      isSeeded = true;
-    } catch (seedErr) {
-      console.error(' Auto-seed error in Vercel:', seedErr.message);
-    }
+    console.error('Firebase serverless setup warning:', err.message);
   }
 }
 
 module.exports = async (req, res) => {
-  await connectToDatabase();
-  return app(req, res);
+  try {
+    await setupDatabase();
+    return app(req, res);
+  } catch (err) {
+    console.error('API initialization error:', err.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Server/database connection failed',
+    });
+  }
 };

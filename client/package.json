@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
+    "@rolldown/binding-win32-x64-msvc": "^0.15.1",
     "aidex-code-breakers": "file:..",
     "axios": "^1.20.0",
     "react": "^19.2.8",
@@ -21,8 +22,8 @@
   "devDependencies": {
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
-    "@vitejs/plugin-react": "^6.1.1",
+    "@vitejs/plugin-react": "^4.3.4",
     "oxlint": "^1.81.0",
-    "vite": "^8.3.0"
+    "vite": "^6.2.0"
   }
 }

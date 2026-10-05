@@ -1,0 +1,123 @@
+[
+  {
+    "_id": "3XaP0wRRL7Z2X4l8N7BD",
+    "name": "Live Team muvhzw2d",
+    "username": "live team muvhzw2d",
+    "password": "$2a$12$R.udpNEkGU7o3qyJ03QveeeEDVVJyEXJpvLRkw4HIrhprpupGqlMi",
+    "role": "participant",
+    "teamName": "Live Team muvhzw2d",
+    "isActive": true,
+    "createdAt": "2026-10-05T17:02:41.906Z",
+    "updatedAt": "2026-10-05T17:02:41.906Z"
+  },
+  {
+    "_id": "6ab78c587ad0aaf965812af0",
+    "name": "Event Admin",
+    "username": "admin",
+    "password": "$2a$12$OM6jOqlqIKczbaJnWeYpoeg9hoXKuEvhLaQTKzE6WSXhmYbbg1F/u",
+    "role": "admin",
+    "teamName": "Event Admin",
+    "isActive": true,
+    "createdAt": "2026-09-26T09:11:52.268Z",
+    "updatedAt": "2026-10-05T17:00:39.773Z"
+  },
+  {
+    "_id": "6ab78d4b07a7cec34bbe7ebe",
+    "name": "rajan",
+    "username": "rajan",
+    "password": "$2a$12$P6/ZPnlnB51l3NV3Kfx38.POLvvV.Gh.515E5fl/jQ0u.UPsggz1W",
+    "role": "participant",
+    "teamName": "rajan",
+    "isActive": true,
+    "createdAt": "2026-09-26T09:15:55.273Z",
+    "updatedAt": "2026-10-05T17:00:40.377Z"
+  },
+  {
+    "_id": "6ab78d5a07a7cec34bbe7ec6",
+    "name": "rakesh",
+    "username": "rakesh",
+    "password": "$2a$12$NPAnETiPwiUR12GG3cjfM.PL3tQbt9A5D69fdBhu.0DamJE8r6yj2",
+    "role": "participant",
+    "teamName": "rakesh",
+    "isActive": true,
+    "createdAt": "2026-09-26T09:16:10.647Z",
+    "updatedAt": "2026-10-05T17:00:40.578Z"
+  },
+  {
+    "_id": "6ab78d6907a7cec34bbe7ece",
+    "name": "robin",
+    "username": "robin",
+    "password": "$2a$12$1YS1wKlwuFQn7wYgNbf08.BXxz2mYmcIkscw7QR2I8ZUCYsJa0MQ2",
+    "role": "participant",
+    "teamName": "robin",
+    "isActive": true,
+    "createdAt": "2026-09-26T09:16:26.002Z",
+    "updatedAt": "2026-10-05T17:00:41.056Z"
+  },
+  {
+    "_id": "6ab78d8707a7cec34bbe7ed6",
+    "name": "anand",
+    "username": "anand",
+    "password": "$2a$12$ibbwPKkgXTv.Wy7MwkkQ9eMypCws1Ov1EwRqPXH3hpRGICHKYlBra",
+    "role": "participant",
+    "teamName": "anand",
+    "isActive": true,
+    "createdAt": "2026-09-26T09:16:55.274Z",
+    "updatedAt": "2026-10-05T17:00:41.344Z"
+  },
+  {
+    "_id": "6abe03985f95e1c408952e55",
+    "name": "kalai",
+    "username": "kalai",
+    "password": "$2a$12$LeFHYn/2aDClAT2c0m5t5.DrWZXoKqf.C1Ze1BjPxT7xAw6Nb8a.i",
+    "role": "participant",
+    "teamName": "kalai",
+    "isActive": true,
+    "createdAt": "2026-10-01T06:54:16.118Z",
+    "updatedAt": "2026-10-05T17:00:41.520Z"
+  },
+  {
+    "_id": "6ac326567bc1eb21baed5ced",
+    "name": "Alpha Squad Elite",
+    "username": "alpha squad elite",
+    "password": "$2a$12$xbfb2qV0NA169qqh7ZMm4eGZGJUkc0ooIIggcW9Cmly5c21UbLYdi",
+    "role": "participant",
+    "teamName": "Alpha Squad Elite",
+    "isActive": true,
+    "createdAt": "2026-10-05T04:23:50.754Z",
+    "updatedAt": "2026-10-05T17:00:41.801Z"
+  },
+  {
+    "_id": "doc_muvhkjskyvuofv5",
+    "name": "Firebase Test Team",
+    "username": "firebase test team",
+    "password": "$2a$12$yRjB.1cPe5E502QWy.IdaOMdsOcP6BgevVCkt4JDb4EQ0ssm0x5jS",
+    "role": "participant",
+    "teamName": "Firebase Test Team",
+    "isActive": true,
+    "createdAt": "2026-10-05T16:50:43.891Z",
+    "updatedAt": "2026-10-05T17:00:42.090Z"
+  },
+  {
+    "_id": "doc_muvhl4epvluaicw",
+    "name": "Firebase Champions",
+    "username": "firebase champions",
+    "password": "$2a$12$KtyYClcgpDFr3rsnHNFP1edV4lcKcB9IkPAhI02uLpUghMk7qaUXC",
+    "role": "participant",
+    "teamName": "Firebase Champions",
+    "isActive": true,
+    "createdAt": "2026-10-05T16:51:10.609Z",
+    "updatedAt": "2026-10-05T17:00:42.307Z"
+  },
+  {
+    "_id": "doc_muvhln8vfy34ae5",
+    "name": "Firebase Victor",
+    "username": "firebase victor",
+    "password": "$2a$12$a9qvs6fFJkMmbX/o6Rh0..PSuc4Qa5pj2evl.x0uH8e2ZIjSljT7W",
+    "role": "participant",
+    "teamName": "Firebase Victor",
+    "isActive": true,
+    "createdAt": "2026-10-05T16:51:35.023Z",
+    "updatedAt": "2026-10-05T17:00:42.565Z"
+  }
+]

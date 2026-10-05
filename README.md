@@ -1,6 +1,7 @@
 # ☢ Code Breakers — Doomsday Edition
 
 > A full-stack technical event platform where participants compete in 3 rounds of coding challenges under a doomsday theme.
+> Powered by **Node.js, Express, React (Vite), and Firebase Cloud Firestore**.
 
 ---
 
@@ -8,8 +9,9 @@
 
 ```
 Code_Debugging/
-├── client/          # React 18 + Vite frontend
-└── server/          # Node.js + Express API
+├── client/          # React + Vite frontend
+├── server/          # Node.js + Express API (Firebase Firestore)
+└── api/             # Vercel serverless entrypoint
 ```
 
 ---
@@ -17,79 +19,79 @@ Code_Debugging/
 ## ⚙️ Prerequisites
 
 - Node.js ≥ 18
-- A [MongoDB Atlas](https://www.mongodb.com/atlas) cluster (free tier works fine)
+- A [Firebase](https://firebase.google.com/) Project with Cloud Firestore enabled
 - npm or yarn
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Clone / extract the project
+### 1. Firebase Setup
+
+You can connect Firebase in any of the following ways:
+
+#### Option A: `serviceAccountKey.json` (Recommended for Local Dev)
+1. Go to **[Firebase Console](https://console.firebase.google.com/)** → **Project Settings** → **Service Accounts**.
+2. Click **Generate new private key** and download the JSON file.
+3. Place it in the `server/` directory (or project root) as `serviceAccountKey.json`.
+
+#### Option B: Environment Variables (Recommended for Deployment / Vercel / Render)
+Set the following environment variables in `.env` (or in your hosting provider's dashboard):
+```env
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxx@your-project.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+```
+
+*Note: If no Firebase credentials are provided, the server automatically starts with a local persistent Firestore datastore for zero-friction local development.*
+
+---
 
 ### 2. Set up environment variables
 
-Copy `.env.example` to `.env` in the **root** of the project, then fill in your values:
-
-```bash
-# From the root directory
-cp .env.example .env
-```
-
-Required fields in `.env`:
-```
-MONGODB_URI=mongodb+srv://<user>:<pass>@cluster0.xxxxx.mongodb.net/code-breakers
-JWT_SECRET=<generate with: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))">
+Copy `.env` in the root:
+```env
 PORT=5000
-ADMIN_SETUP_SECRET=my-secret-admin-key
+NODE_ENV=development
+JWT_SECRET=codebreakers_secret_key_2026
 CLIENT_URL=http://localhost:5173
-AUTO_GRADE_ENABLED=false
+
+# Firebase Configuration
+FIREBASE_PROJECT_ID=your-firebase-project-id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxx@your-project.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 ```
 
-> **MongoDB Atlas note:** Go to Network Access → Add IP Address → Allow access from anywhere (`0.0.0.0/0`) during development, or whitelist your server's IP for production.
+---
 
-### 3. Install server dependencies
+### 3. Install dependencies & Seed
 
 ```bash
-cd server
-npm install
+# Install dependencies
+npm install --prefix server
+npm install --prefix client
+
+# Seed questions & admin account
+npm run seed --prefix server
 ```
 
-### 4. Install client dependencies
+Default Admin credentials:
+- **Username:** `admin`
+- **Password:** `CodeBreaker123`
 
+---
+
+### 4. Start Development Servers
+
+**Backend:**
 ```bash
-cd client
-npm install
-```
-
-### 5. Seed the database
-
-```bash
-cd server
-npm run seed
-```
-
-This will:
-- Create admin account: `username=admin / password=Admin@1234`
-- Create 20 sample MCQ questions (Round 1)
-- Create 5 sample output questions (Round 2)
-- Create 3 sample debug questions (Round 3)
-- Initialize all 3 rounds as **locked**
-
-> ⚠️ **Change the admin password** after first login!
-
-### 6. Start the development servers
-
-**Terminal 1 — Backend:**
-```bash
-cd server
-npm run dev
+npm run dev --prefix server
 # Runs on http://localhost:5000
 ```
 
-**Terminal 2 — Frontend:**
+**Frontend:**
 ```bash
-cd client
-npm run dev
+npm run dev --prefix client
 # Runs on http://localhost:5173
 ```
 
@@ -99,9 +101,7 @@ npm run dev
 
 | Role | Username | Password |
 |---|---|---|
-| Admin | `admin` | `Admin@1234` |
-
-> ⚠️ Change this immediately via Admin Panel → Participants → Edit.
+| Admin | `admin` | `CodeBreaker123` |
 
 ---
 
@@ -109,100 +109,22 @@ npm run dev
 
 ### Admin
 - Access Admin Panel at `/admin`
-- Can create/manage participants, questions, round locks, view results, export data
+- Manage participants, questions, round locks, manual review queue, PDF reports & Excel/CSV export
 
 ### Participant
-- Cannot self-register — accounts created by admin only
-- Access home page at `/` after login
-- Can only enter unlocked rounds
-
----
-
-## 📖 Features
-
-### Participant-Facing
-- 🔒 **Doomsday-themed login** with glowing red form
-- 🏠 **Home page** with 3 sector cards (locked/unlocked/completed)
-- 📡 **Live Top-3 leaderboard** sidebar (20s polling)
-- 📡 **Round 1** — 20 MCQ questions, one-at-a-time navigator
-- 💀 **Round 2** — Code output prediction with syntax highlighting
-- ☠ **Round 3** — Monaco code editor for debugging challenges
-
-### Admin Panel
-- 👥 **Participant management**: create, bulk CSV upload, reset password, deactivate
-- 📝 **Question bank**: CRUD for all 3 round types
-- 🔒 **Round control**: lock/unlock with optional time limits
-- 📊 **Results dashboard**: full leaderboard + Round 3 manual review
-- ↓ **Export**: per-round and overall results as `.xlsx` or `.csv`
-
----
-
-## 🔐 Security
-
-- Passwords hashed with **bcrypt** (cost factor 12) — never stored in plaintext
-- **JWT tokens** with 8-hour expiry
-- **Server-side scoring** — client scores never trusted
-- Correct answers **never sent** to participant API endpoints
-- **Rate limiting** on login: 10 attempts / 15 minutes per IP
-- Round-lock enforcement on every submission attempt
-
----
-
-## 🌐 Deployment Notes
-
-| Service | Recommended Host |
-|---|---|
-| Frontend | Vercel or Netlify |
-| Backend | Render or Railway |
-| Database | MongoDB Atlas |
-
-**Frontend (Vercel):**
-- Build command: `npm run build`
-- Output: `dist/`
-- Add env var: `VITE_API_URL=https://your-backend.onrender.com`
-- Update `client/src/api/axios.js` baseURL to use `import.meta.env.VITE_API_URL`
-
-**Backend (Render):**
-- Add all env vars from `.env.example`
-- Start command: `npm start`
-- Update `CORS CLIENT_URL` to your Vercel URL
-
----
-
-## 🔧 Configuration
-
-| Variable | Default | Description |
-|---|---|---|
-| `AUTO_GRADE_ENABLED` | `false` | Enable Judge0 API for Round 3 auto-grading |
-| `ROUND1_QUESTION_COUNT` | `20` | Questions shown per participant in Round 1 |
-| Leaderboard poll interval | `20s` | Configurable in `HomePage.jsx` `POLL_INTERVAL` |
-
----
-
-## 📁 CSV Bulk Import Format
-
-For bulk participant creation via Admin Panel → Participants → Bulk CSV Upload:
-
-```csv
-name,username,password,teamName
-Alice Johnson,alice,Pass@123,Team Alpha
-Bob Smith,bobsmith,Pass@456,Team Beta
-Charlie Brown,charlie,Pass@789,
-```
-
-- `teamName` column is optional
-- Header row is required
-- Invalid rows are reported without stopping the import
+- Accounts created by admin or bulk CSV
+- Access rounds when unlocked by admin
+- Live leaderboard tracking
 
 ---
 
 ## 🏆 Scoring
 
-- **Round 1**: 5 pts per correct MCQ answer (20 questions = max 100 pts)
-- **Round 2**: 10 pts per correct output prediction
-- **Round 3**: 15 pts per challenge (admin-graded or auto-graded)
-- **Cumulative**: R1 + R2 + R3
-- **Tie-breaker**: Earliest submission timestamp wins
+- **Round 1 (Basic)**: 15 questions x 2 marks = 30 marks
+- **Round 2 (Intermediate)**: 10 questions x 3 marks = 30 marks
+- **Round 3 (Advanced)**: 8 questions x 5 marks = 40 marks
+- **Total Marks**: 100 marks
+- **Tie-breaker**: Earliest submission timestamp
 
 ---
 
@@ -212,14 +134,20 @@ Charlie Brown,charlie,Pass@789,
 |---|---|---|
 | POST | `/api/auth/login` | Public |
 | GET | `/api/auth/me` | Auth |
-| POST | `/api/auth/admin/setup` | Secret-gated |
 | GET | `/api/rounds/status` | Participant |
 | GET | `/api/rounds/round1/questions` | Participant |
 | POST | `/api/rounds/round1/submit` | Participant |
+| GET | `/api/rounds/round2/questions` | Participant |
+| POST | `/api/rounds/round2/submit` | Participant |
+| GET | `/api/rounds/round3/questions` | Participant |
+| POST | `/api/rounds/round3/run` | Participant |
+| POST | `/api/rounds/round3/submit` | Participant |
+| GET | `/api/rounds/final-result` | Participant |
+| GET | `/api/rounds/scorecard-pdf` | Participant |
 | GET | `/api/leaderboard/top3` | Auth |
-| GET | `/api/leaderboard/full` | Admin |
-| CRUD | `/api/admin/users` | Admin |
-| CRUD | `/api/admin/round1-questions` | Admin |
+| GET | `/api/admin/results` | Admin |
+| GET | `/api/admin/users` | Admin |
+| POST | `/api/admin/users` | Admin |
 | PATCH | `/api/admin/round-control/:round` | Admin |
 | GET | `/api/admin/export/:round` | Admin |
-| GET | `/api/admin/export/overall` | Admin |
+| GET | `/api/admin/export/pdf` | Admin |
