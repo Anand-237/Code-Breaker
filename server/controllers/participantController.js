@@ -1,8 +1,10 @@
+const User = require('../models/User');
 const RoundControl = require('../models/RoundControl');
 const Question = require('../models/Question');
 const Submission = require('../models/Submission');
 const { executeCode, isOutputMatch } = require('../utils/codeExecutor');
 const { ROUND_CONFIG } = require('../utils/roundConfig');
+const { generateRankingsPdf } = require('../utils/pdfGenerator');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -84,37 +86,154 @@ const getRoundStatus = async (req, res) => {
   }
 };
 
+// ─── Leaderboard & Event Completion Engine ──────────────────────────────────
+const getEventLeaderboard = async () => {
+  const participants = await User.find({ role: 'participant', isActive: true })
+    .select('name username teamName')
+    .sort({ createdAt: 1 });
+
+  const submissions = await Submission.find({ status: { $in: ['submitted', 'pending-review'] } })
+    .populate('userId', 'name username teamName')
+    .sort({ submittedAt: 1 });
+
+  const userMap = {};
+  participants.forEach((p) => {
+    const uid = p._id.toString();
+    userMap[uid] = {
+      userId: uid,
+      name: p.name,
+      username: p.username,
+      teamName: p.teamName || p.name || p.username,
+      roundScores: { 1: 0, 2: 0, 3: 0 },
+      completedRounds: new Set(),
+      totalScore: 0,
+      earliestSubmit: null,
+      latestSubmit: null,
+    };
+  });
+
+  submissions.forEach((sub) => {
+    if (!sub.userId) return;
+    const uid = String(sub.userId._id || sub.userId.id || sub.userId);
+    if (!userMap[uid]) return;
+
+    userMap[uid].roundScores[sub.round] = sub.totalScore || 0;
+    userMap[uid].completedRounds.add(sub.round);
+    if (sub.submittedAt) {
+      if (!userMap[uid].earliestSubmit || sub.submittedAt < userMap[uid].earliestSubmit) {
+        userMap[uid].earliestSubmit = sub.submittedAt;
+      }
+      if (!userMap[uid].latestSubmit || sub.submittedAt > userMap[uid].latestSubmit) {
+        userMap[uid].latestSubmit = sub.submittedAt;
+      }
+    }
+  });
+
+  // Calculate cumulative scores
+  Object.values(userMap).forEach((u) => {
+    u.totalScore = (u.roundScores[1] || 0) + (u.roundScores[2] || 0) + (u.roundScores[3] || 0);
+  });
+
+  let completedParticipants = 0;
+  Object.values(userMap).forEach((u) => {
+    if (u.completedRounds.has(1) && u.completedRounds.has(2) && u.completedRounds.has(3)) {
+      completedParticipants++;
+    }
+  });
+
+  const totalParticipants = participants.length;
+  const allCompleted = totalParticipants > 0 && completedParticipants >= totalParticipants;
+
+  const leaderboard = Object.values(userMap).map((u) => ({
+    userId: u.userId,
+    name: u.name,
+    username: u.username,
+    teamName: u.teamName,
+    roundScores: u.roundScores,
+    totalScore: u.totalScore,
+    isFullyCompleted: u.completedRounds.has(1) && u.completedRounds.has(2) && u.completedRounds.has(3),
+    completedRoundsCount: u.completedRounds.size,
+    submittedAt: u.latestSubmit,
+    earliestSubmit: u.earliestSubmit,
+  })).sort((a, b) => {
+    if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
+    if (a.earliestSubmit && b.earliestSubmit) {
+      return new Date(a.earliestSubmit) - new Date(b.earliestSubmit);
+    }
+    return 0;
+  }).map((p, idx) => ({
+    ...p,
+    rank: idx + 1,
+  }));
+
+  return {
+    totalParticipants,
+    completedParticipants,
+    allCompleted,
+    leaderboard,
+  };
+};
+
 // ─── GET /api/rounds/final-result ─────────────────────────────────────────────
 const getFinalResult = async (req, res) => {
   try {
-    const submissions = await Submission.find({
+    const { totalParticipants, completedParticipants, allCompleted, leaderboard } = await getEventLeaderboard();
+
+    const userSubmissions = await Submission.find({
       userId: req.user._id,
       status: { $in: ['submitted', 'pending-review'] },
     });
+    const userRounds = new Set(userSubmissions.map((s) => s.round));
+    const userCompleted = userRounds.has(1) && userRounds.has(2) && userRounds.has(3);
 
-    const subMap = {};
-    submissions.forEach((s) => (subMap[s.round] = s));
+    // If not all participants have completed all rounds, do NOT show final scores
+    if (!allCompleted && req.user.role !== 'admin') {
+      return res.json({
+        allCompleted: false,
+        userCompleted,
+        totalParticipants,
+        completedParticipants,
+        message: 'Waiting for all participants to complete all rounds before releasing final rankings and PDF leaderboard.',
+      });
+    }
 
-    const round1Score = subMap[1] ? subMap[1].totalScore : 0;
-    const round2Score = subMap[2] ? subMap[2].totalScore : 0;
-    const round3Score = subMap[3] ? subMap[3].totalScore : 0;
-
-    const totalScore = round1Score + round2Score + round3Score;
-    const maxTotalMarks = ROUND_CONFIG[1].maxMarks + ROUND_CONFIG[2].maxMarks + ROUND_CONFIG[3].maxMarks;
-    const percentage = Math.round((totalScore / maxTotalMarks) * 100);
+    // When all participants completed (or for admin), return leaderboard and my rank
+    const myEntry = leaderboard.find((p) => p.userId === req.user._id.toString());
 
     res.json({
-      round1: { score: round1Score, maxMarks: ROUND_CONFIG[1].maxMarks, submitted: !!subMap[1] },
-      round2: { score: round2Score, maxMarks: ROUND_CONFIG[2].maxMarks, submitted: !!subMap[2] },
-      round3: { score: round3Score, maxMarks: ROUND_CONFIG[3].maxMarks, submitted: !!subMap[3] },
-      totalScore,
-      maxTotalMarks,
-      percentage,
-      isFullyCompleted: !!(subMap[1] && subMap[2] && subMap[3]),
+      allCompleted: true,
+      userCompleted,
+      totalParticipants,
+      completedParticipants,
+      myRank: myEntry ? myEntry.rank : null,
+      leaderboard,
     });
   } catch (err) {
     console.error('getFinalResult error:', err);
     res.status(500).json({ message: 'Server error getting final result' });
+  }
+};
+
+// ─── GET /api/rounds/rankings-pdf ─────────────────────────────────────────────
+const getRankingsPdf = async (req, res) => {
+  try {
+    const { allCompleted, leaderboard } = await getEventLeaderboard();
+
+    if (!allCompleted && req.user.role !== 'admin') {
+      return res.status(403).json({
+        message: 'PDF rankings will be available once all participants finish all rounds.',
+      });
+    }
+
+    const pdfBuffer = await generateRankingsPdf(leaderboard);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="CodeBreakers_Final_Rankings.pdf"');
+    res.setHeader('Content-Length', pdfBuffer.length);
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error('getRankingsPdf error:', err);
+    res.status(500).json({ message: 'Failed to generate PDF' });
   }
 };
 
@@ -571,6 +690,8 @@ const submitRound3 = async (req, res) => {
 module.exports = {
   getRoundStatus,
   getFinalResult,
+  getRankingsPdf,
+  getEventLeaderboard,
   getRound1Questions,
   submitRound1,
   getRound2Questions,

@@ -16,7 +16,7 @@ const {
 } = require('../controllers/adminQuestionController');
 const { getRoundControl, updateRoundControl } = require('../controllers/roundControlController');
 const { getResults, getUserAnswerSheet, reviewRound3 } = require('../controllers/adminResultsController');
-const { exportRound, exportOverall } = require('../controllers/exportController');
+const { exportRound, exportOverall, exportPdf } = require('../controllers/exportController');
 
 // All admin routes require auth + admin role
 router.use(protect, requireAdmin);
@@ -70,6 +70,7 @@ router.patch('/results/review/:submissionId', reviewRound3);
 
 // ─── Exports ─────────────────────────────────────────────────────────────────
 router.get('/export/overall', exportOverall);
+router.get('/export/pdf', exportPdf);
 router.get('/export/:round', exportRound);
 
 module.exports = router;

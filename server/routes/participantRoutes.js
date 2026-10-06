@@ -4,6 +4,7 @@ const { protect } = require('../middleware/auth');
 const {
   getRoundStatus,
   getFinalResult,
+  getRankingsPdf,
   getRound1Questions,
   submitRound1,
   getRound2Questions,
@@ -19,6 +20,7 @@ router.use(protect);
 // Round status overview & final overall score
 router.get('/status', getRoundStatus);
 router.get('/final-result', getFinalResult);
+router.get('/rankings-pdf', getRankingsPdf);
 
 // Round 1
 router.get('/round1/questions', getRound1Questions);

@@ -246,17 +246,17 @@ export default function Round3Page() {
           Concept-Based Debugging Round — 8 Questions
         </p>
 
-        <div className="card card-glow" style={{ padding: '28px 36px', textAlign: 'center', width: 'min(100%, 440px)' }}>
+        <div className="card card-glow" style={{ padding: '28px 36px', textAlign: 'center', width: 'min(100%, 480px)' }}>
           <p style={{ fontFamily: 'var(--font-heading)', fontSize: '0.95rem', color: '#4ade80', marginBottom: '8px', textTransform: 'uppercase' }}>
             ✓ ALL ROUNDS SUBMITTED
           </p>
           <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', marginTop: '8px', lineHeight: 1.5 }}>
-            Congratulations! You have submitted all rounds of Code Breakers. Click below to view your Final Score.
+            Congratulations! You have submitted all rounds of Code Breakers. When all participants finish, the official leaderboard and ranking PDF will automatically download and display.
           </p>
         </div>
 
-        <button className="btn btn-primary btn-lg" onClick={() => navigate('/final-result')}>
-          VIEW FINAL RESULT (/100) →
+        <button className="btn btn-primary btn-lg" onClick={() => navigate('/final-result')} style={{ background: '#4ade80', color: '#000', fontWeight: 700 }}>
+          VIEW EVENT STATUS & PDF RANKINGS →
         </button>
       </div>
     )
@@ -658,14 +658,14 @@ export default function Round3Page() {
               Submit your code for all {questions.length} challenges in Round 3.
             </p>
             <p style={{ color: '#4ade80', fontFamily: 'var(--font-heading)', fontSize: '0.82rem', marginBottom: '24px' }}>
-              Your score will be calculated and final result breakdown out of 100 will be displayed.
+              Your submission will be recorded. The official leaderboard & PDF ranking sheet will be published as soon as all participants finish.
             </p>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               <button className="btn btn-secondary" onClick={() => setShowConfirm(false)}>
                 CANCEL
               </button>
-              <button id="confirm-submit-round3" className="btn btn-primary" onClick={handleSubmit} style={{ background: '#4ade80', color: '#000', border: 'none' }}>
-                CONFIRM & SEE RESULT
+              <button id="confirm-submit-round3" className="btn btn-primary" onClick={handleSubmit} style={{ background: '#4ade80', color: '#000', border: 'none', fontWeight: 700 }}>
+                CONFIRM & SUBMIT ROUND 3
               </button>
             </div>
           </div>

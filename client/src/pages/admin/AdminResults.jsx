@@ -36,17 +36,20 @@ export default function AdminResults() {
 
   const handleExport = async (round, format = 'xlsx') => {
     try {
-      const url = round === 'overall'
+      let url = round === 'overall'
         ? `/api/admin/export/overall?format=${format}`
         : `/api/admin/export/${round}?format=${format}`
+      if (format === 'pdf') {
+        url = '/api/admin/export/pdf'
+      }
       const response = await fetch(url, { headers: { Authorization: `Bearer ${localStorage.getItem('cb_token')}` } })
       if (!response.ok) throw new Error('Export failed')
       const blob = await response.blob()
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      a.download = round === 'overall' ? `overall_results.${format}` : `round${round}_results.${format}`
+      a.download = format === 'pdf' ? 'CodeBreakers_Official_Rankings.pdf' : (round === 'overall' ? `overall_results.${format}` : `round${round}_results.${format}`)
       a.click()
-      toast.success(`Export (${round === 'overall' ? 'Overall' : 'Round ' + round}) downloaded`)
+      toast.success(`Export (${format.toUpperCase()}) downloaded`)
     } catch { toast.error('Export failed') }
   }
 
@@ -119,6 +122,14 @@ export default function AdminResults() {
         <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', alignItems:'center' }}>
           <button
             className="btn btn-primary btn-sm"
+            onClick={() => handleExport('overall', 'pdf')}
+            style={{ fontSize:'0.78rem', gap:'6px', background: '#4ade80', color: '#000', fontWeight: 700 }}
+            title="Download official PDF leaderboard rankings sheet"
+          >
+            📥 Official PDF Rankings
+          </button>
+          <button
+            className="btn btn-secondary btn-sm"
             onClick={() => handleExport('overall', 'xlsx')}
             style={{ fontSize:'0.78rem', gap:'6px' }}
             title="Download full Excel report with cumulative scores"

@@ -152,7 +152,7 @@ export default function HomePage() {
               onClick={() => navigate('/final-result')}
               style={{ background: '#4ade80', color: '#000', fontWeight: 700 }}
             >
-              VIEW FINAL RESULT (/100)
+              VIEW FINAL RANKINGS & PDF
             </button>
           )}
           <div style={{ textAlign: 'right' }}>
@@ -308,7 +308,7 @@ export default function HomePage() {
                     navigate('/final-result')
                   }}
                 >
-                  ✓ VIEW RESULT BREAKDOWN
+                  ✓ VIEW EVENT STATUS & PDF RANKINGS
                 </button>
               ) : selectedModalData?.isUnlocked ? (
                 <button id={`start-sector-${activeModalRound}`} className="poker-modal-start-btn" onClick={() => handleEnter(activeModalRound, selectedModalData)}>

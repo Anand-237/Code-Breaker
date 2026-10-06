@@ -141,4 +141,26 @@ const exportOverall = async (req, res) => {
   }
 };
 
-module.exports = { exportRound, exportOverall };
+const { generateRankingsPdf } = require('../utils/pdfGenerator');
+const { getEventLeaderboard } = require('./participantController');
+
+/**
+ * GET /api/admin/export/pdf
+ * Export official branded PDF leaderboard rankings
+ */
+const exportPdf = async (req, res) => {
+  try {
+    const { leaderboard } = await getEventLeaderboard();
+    const pdfBuffer = await generateRankingsPdf(leaderboard);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="CodeBreakers_Official_Rankings.pdf"');
+    res.setHeader('Content-Length', pdfBuffer.length);
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error('exportPdf error:', err);
+    res.status(500).json({ message: 'PDF export failed' });
+  }
+};
+
+module.exports = { exportRound, exportOverall, exportPdf };
