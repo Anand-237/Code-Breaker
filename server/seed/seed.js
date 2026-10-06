@@ -33,6 +33,12 @@ const seed = async () => {
       );
     }
 
+    const existingQuestionCount = (await Question.find({})).length;
+    if (existingQuestionCount >= 33) {
+      console.log(`✅ Questions already present (${existingQuestionCount} questions). Skipping re-seed.`);
+      return;
+    }
+
     // ─── Round 1 Questions (Basic: 15 questions x 2 marks = 30 marks) ────────
     await Question.deleteMany({ round: 1 });
     await Question.insertMany([

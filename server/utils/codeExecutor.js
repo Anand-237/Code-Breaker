@@ -2,7 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
-const { execFile, exec } = require('child_process');
+const https = require('https');
+const { execFile } = require('child_process');
 
 /**
  * Normalize string output for reliable comparison
@@ -36,6 +37,73 @@ function isOutputMatch(actual, expected) {
   }
 
   return false;
+}
+
+/**
+ * Fallback remote execution using high-performance sandbox (Wandbox API)
+ * Triggered automatically when local toolchain binaries (javac, python, gcc) are missing (e.g. in Vercel serverless)
+ */
+function runRemoteCode(compiler, code, input = '', timeoutMs = 9000) {
+  return new Promise((resolve) => {
+    let sanitizedCode = code;
+    if (compiler.includes('openjdk')) {
+      sanitizedCode = code.replace(/public\s+class\s+([A-Za-z0-9_]+)/, 'class $1');
+    }
+
+    const payload = JSON.stringify({
+      compiler,
+      code: sanitizedCode,
+      stdin: input || '',
+    });
+
+    const req = https.request({
+      hostname: 'wandbox.org',
+      path: '/api/compile.json',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+        'User-Agent': 'Mozilla/5.0',
+      },
+      timeout: timeoutMs,
+    }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          const compilerError = parsed.compiler_error || parsed.compiler_message || '';
+          if (parsed.status !== '0' && compilerError) {
+            resolve({
+              success: false,
+              output: '',
+              error: `Compilation Error:\n${compilerError}`,
+            });
+          } else {
+            resolve({
+              success: parsed.status === '0',
+              output: parsed.program_output || parsed.program_message || '',
+              error: parsed.program_error || (parsed.status !== '0' ? 'Runtime error' : null),
+            });
+          }
+        } catch (_) {
+          resolve({ success: false, output: '', error: 'Failed to parse compiler response' });
+        }
+      });
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ success: false, output: '', error: 'Execution timed out (Time limit exceeded)' });
+    });
+
+    req.on('error', (err) => {
+      resolve({ success: false, output: '', error: `Execution service error: ${err.message}` });
+    });
+
+    req.write(payload);
+    req.end();
+  });
 }
 
 /**
@@ -131,8 +199,10 @@ function runCommandAsync(cmd, args, options = {}) {
     });
 
     if (options.input) {
-      child.stdin.write(options.input);
-      child.stdin.end();
+      try {
+        child.stdin.write(options.input);
+        child.stdin.end();
+      } catch (_) {}
     }
   });
 }
@@ -150,11 +220,24 @@ async function runPython(code, tempDir, timeoutMs, input) {
 
   // If python not found, try py or python3
   if (!res.success && res.error && res.error.includes('ENOENT')) {
+    res = await runCommandAsync('python3', [filePath], {
+      cwd: tempDir,
+      timeout: timeoutMs,
+      input,
+    });
+  }
+
+  if (!res.success && res.error && res.error.includes('ENOENT')) {
     res = await runCommandAsync('py', [filePath], {
       cwd: tempDir,
       timeout: timeoutMs,
       input,
     });
+  }
+
+  // If local python is completely unavailable (e.g. serverless environment), fallback to remote CPython
+  if (!res.success && res.error && res.error.includes('ENOENT')) {
+    return await runRemoteCode('cpython-3.12.7', code, input, timeoutMs + 4000);
   }
 
   return res;
@@ -199,6 +282,10 @@ async function runCpp(code, tempDir, timeoutMs, input) {
     timeout: timeoutMs,
   });
 
+  if (!compileRes.success && compileRes.error && compileRes.error.includes('ENOENT')) {
+    return await runRemoteCode('gcc-13.2.0', code, input, timeoutMs + 4000);
+  }
+
   if (!compileRes.success) {
     return {
       success: false,
@@ -223,6 +310,10 @@ async function runC(code, tempDir, timeoutMs, input) {
     cwd: tempDir,
     timeout: timeoutMs,
   });
+
+  if (!compileRes.success && compileRes.error && compileRes.error.includes('ENOENT')) {
+    return await runRemoteCode('gcc-13.2.0-c', code, input, timeoutMs + 4000);
+  }
 
   if (!compileRes.success) {
     return {
@@ -250,6 +341,11 @@ async function runJava(code, tempDir, timeoutMs, input) {
     timeout: timeoutMs,
   });
 
+  // If local javac is not installed (e.g. Vercel serverless / Linux minimal container without JDK), fallback to remote OpenJDK 21
+  if (!compileRes.success && compileRes.error && compileRes.error.includes('ENOENT')) {
+    return await runRemoteCode('openjdk-jdk-21+35', code, input, timeoutMs + 4000);
+  }
+
   if (!compileRes.success) {
     return {
       success: false,
@@ -258,11 +354,17 @@ async function runJava(code, tempDir, timeoutMs, input) {
     };
   }
 
-  return await runCommandAsync('java', ['-cp', tempDir, className], {
+  const execRes = await runCommandAsync('java', ['-cp', tempDir, className], {
     cwd: tempDir,
     timeout: timeoutMs,
     input,
   });
+
+  if (!execRes.success && execRes.error && execRes.error.includes('ENOENT')) {
+    return await runRemoteCode('openjdk-jdk-21+35', code, input, timeoutMs + 4000);
+  }
+
+  return execRes;
 }
 
 module.exports = {
