@@ -297,7 +297,7 @@ export default function Round2Page() {
             <textarea
               id={`output-answer-${currentIdx}`}
               className="input code-textarea-input"
-              placeholder="Type exact output here (e.g. 120 or 25)"
+              placeholder="Type exact output here"
               value={answers[q._id] || ''}
               onChange={(e) => setAnswer(q._id, e.target.value)}
               disabled={submitting}
