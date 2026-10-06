@@ -36,22 +36,33 @@ export default function AdminResults() {
 
   const handleExport = async (round, format = 'xlsx') => {
     try {
-      let url = round === 'overall'
-        ? `/api/admin/export/overall?format=${format}`
-        : `/api/admin/export/${round}?format=${format}`
+      let endpoint = round === 'overall'
+        ? `/admin/export/overall?format=${format}`
+        : `/admin/export/${round}?format=${format}`
       if (format === 'pdf') {
-        url = '/api/admin/export/pdf'
+        endpoint = '/admin/export/pdf'
       }
-      const token = sessionStorage.getItem('cb_token') || localStorage.getItem('cb_token')
-      const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      if (!response.ok) throw new Error('Export failed')
-      const blob = await response.blob()
+
+      const res = await api.get(endpoint, { responseType: 'blob' })
+      const blob = new Blob([res.data], {
+        type: format === 'pdf' ? 'application/octet-stream' : res.headers['content-type'] || 'application/octet-stream'
+      })
+      const downloadUrl = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
+      a.style.display = 'none'
+      a.href = downloadUrl
       a.download = format === 'pdf' ? 'CodeBreakers_Official_Rankings.pdf' : (round === 'overall' ? `overall_results.${format}` : `round${round}_results.${format}`)
+      document.body.appendChild(a)
       a.click()
+      setTimeout(() => {
+        document.body.removeChild(a)
+        window.URL.revokeObjectURL(downloadUrl)
+      }, 3000)
       toast.success(`Export (${format.toUpperCase()}) downloaded`)
-    } catch { toast.error('Export failed') }
+    } catch (err) {
+      console.error('handleExport error:', err)
+      toast.error('Export failed')
+    }
   }
 
   const openAnswerSheet = async (userId) => {
