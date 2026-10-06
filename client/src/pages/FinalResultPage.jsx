@@ -6,6 +6,45 @@ import GreenDustParticles from '../components/GreenDustParticles'
 
 const POLL_INTERVAL = 3000 // 3 seconds live poll while waiting for participants
 
+/**
+ * Converts a Base64 string to a downloadable Blob & Object URL
+ */
+function base64ToBlobUrl(base64Data, contentType = 'application/pdf') {
+  try {
+    const byteCharacters = atob(base64Data)
+    const byteArrays = []
+    const sliceSize = 512
+    for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+      const slice = byteCharacters.slice(offset, offset + sliceSize)
+      const byteNumbers = new Array(slice.length)
+      for (let i = 0; i < slice.length; i++) {
+        byteNumbers[i] = slice.charCodeAt(i)
+      }
+      const byteArray = new Uint8Array(byteNumbers)
+      byteArrays.push(byteArray)
+    }
+    const blob = new Blob(byteArrays, { type: contentType })
+    const url = window.URL.createObjectURL(blob)
+    return { blob, url }
+  } catch (e) {
+    console.error('Error converting base64 to Blob URL:', e)
+    return { blob: null, url: null }
+  }
+}
+
+/**
+ * Triggers a browser file download programmatically
+ */
+function triggerFileDownload(url, filename = 'CodeBreakers_Final_Rankings.pdf') {
+  if (!url) return
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
 export default function FinalResultPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -15,7 +54,50 @@ export default function FinalResultPage() {
   const [activeTab, setActiveTab] = useState('leaderboard') // 'leaderboard' | 'pdf'
   const [pdfBlobUrl, setPdfBlobUrl] = useState(null)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  
   const autoDownloadedRef = useRef(false)
+  const pdfBlobUrlRef = useRef(null)
+
+  // Download / prepare PDF from Base64 or fallback API
+  const prepareAndDownloadPdf = useCallback(async (isAuto = false) => {
+    try {
+      setDownloadingPdf(true)
+
+      // 1. If we already have a generated Blob URL, reuse it instantly
+      if (pdfBlobUrlRef.current) {
+        if (!isAuto) {
+          triggerFileDownload(pdfBlobUrlRef.current)
+        }
+        return pdfBlobUrlRef.current
+      }
+
+      // 2. If resultData has pdfBase64, decode directly
+      if (resultData?.pdfBase64) {
+        const { url } = base64ToBlobUrl(resultData.pdfBase64)
+        if (url) {
+          pdfBlobUrlRef.current = url
+          setPdfBlobUrl(url)
+          triggerFileDownload(url)
+          return url
+        }
+      }
+
+      // 3. Fallback: Network fetch from /rounds/rankings-pdf
+      const res = await api.get('/rounds/rankings-pdf', {
+        responseType: 'blob',
+      })
+      const blob = new Blob([res.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      pdfBlobUrlRef.current = url
+      setPdfBlobUrl(url)
+      triggerFileDownload(url)
+      return url
+    } catch (err) {
+      console.error('PDF download error:', err)
+    } finally {
+      setDownloadingPdf(false)
+    }
+  }, [resultData?.pdfBase64])
 
   // Fetch live contest completion & leaderboard status
   const fetchStatus = useCallback(async () => {
@@ -24,16 +106,34 @@ export default function FinalResultPage() {
       setResultData(data)
       setLoading(false)
 
-      // If all participants completed, fetch & auto-download PDF once
-      if (data.allCompleted && !autoDownloadedRef.current) {
-        autoDownloadedRef.current = true
-        downloadAndLoadPdf(true)
+      // When all participants completed, create Blob URL immediately
+      if (data.allCompleted) {
+        let currentUrl = pdfBlobUrlRef.current
+
+        if (!currentUrl && data.pdfBase64) {
+          const { url } = base64ToBlobUrl(data.pdfBase64)
+          if (url) {
+            currentUrl = url
+            pdfBlobUrlRef.current = url
+            setPdfBlobUrl(url)
+          }
+        }
+
+        // Trigger automatic download once
+        if (!autoDownloadedRef.current) {
+          autoDownloadedRef.current = true
+          if (currentUrl) {
+            triggerFileDownload(currentUrl)
+          } else {
+            prepareAndDownloadPdf(true)
+          }
+        }
       }
     } catch (err) {
       console.error('Final result status error:', err)
       setLoading(false)
     }
-  }, [])
+  }, [prepareAndDownloadPdf])
 
   // Auto-poll while not all completed
   useEffect(() => {
@@ -46,30 +146,14 @@ export default function FinalResultPage() {
     return () => clearInterval(timer)
   }, [fetchStatus, resultData?.allCompleted])
 
-  // Download and prepare PDF blob URL for display and auto-download
-  const downloadAndLoadPdf = async (isAuto = false) => {
-    try {
-      setDownloadingPdf(true)
-      const res = await api.get('/rounds/rankings-pdf', {
-        responseType: 'blob',
-      })
-      const blob = new Blob([res.data], { type: 'application/pdf' })
-      const url = window.URL.createObjectURL(blob)
-      setPdfBlobUrl(url)
-
-      // Trigger automatic file download
-      const link = document.createElement('a')
-      link.href = url
-      link.download = 'CodeBreakers_Final_Rankings.pdf'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    } catch (err) {
-      console.error('PDF download error:', err)
-    } finally {
-      setDownloadingPdf(false)
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (pdfBlobUrlRef.current) {
+        window.URL.revokeObjectURL(pdfBlobUrlRef.current)
+      }
     }
-  }
+  }, [])
 
   if (loading) {
     return (
@@ -252,7 +336,7 @@ export default function FinalResultPage() {
               <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '18px', flexWrap: 'wrap' }}>
                 <button
                   className="btn btn-primary"
-                  onClick={() => downloadAndLoadPdf(false)}
+                  onClick={() => prepareAndDownloadPdf(false)}
                   disabled={downloadingPdf}
                   style={{
                     background: '#4ade80',
@@ -262,7 +346,7 @@ export default function FinalResultPage() {
                     padding: '8px 20px',
                   }}
                 >
-                  {downloadingPdf ? 'Downloading PDF...' : '📥 DOWNLOAD PDF AGAIN'}
+                  {downloadingPdf ? 'Downloading PDF...' : '📥 DOWNLOAD PDF CERTIFICATE'}
                 </button>
 
                 {pdfBlobUrl && (
@@ -273,14 +357,14 @@ export default function FinalResultPage() {
                     className="btn btn-secondary"
                     style={{ padding: '8px 18px' }}
                   >
-                    🖨️ OPEN PDF IN NEW TAB
+                    🖨️ OPEN IN NEW TAB / PRINT
                   </a>
                 )}
               </div>
             </div>
 
             {/* Top 3 Podium Cards */}
-            {leaderboard.length >= 3 && (
+            {leaderboard.length >= 2 && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', marginBottom: '28px' }}>
                 {/* 2nd Place */}
                 {top2 && (
@@ -369,7 +453,7 @@ export default function FinalResultPage() {
                 className={`btn btn-sm ${activeTab === 'pdf' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => {
                   setActiveTab('pdf')
-                  if (!pdfBlobUrl) downloadAndLoadPdf(false)
+                  if (!pdfBlobUrl) prepareAndDownloadPdf(true)
                 }}
                 style={activeTab === 'pdf' ? { background: '#4ade80', color: '#000', fontWeight: 700 } : {}}
               >
@@ -453,23 +537,78 @@ export default function FinalResultPage() {
 
             {/* TAB 2: EMBEDDED PDF DOCUMENT PREVIEW */}
             {activeTab === 'pdf' && (
-              <div className="card" style={{ padding: '16px', minHeight: '650px', background: '#0f172a' }}>
+              <div className="card" style={{ padding: '16px', background: '#0f172a', border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: '#4ade80', fontWeight: 700 }}>
+                      📄 Official PDF Certificate Document
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      className="btn btn-sm btn-primary"
+                      onClick={() => prepareAndDownloadPdf(false)}
+                      disabled={downloadingPdf}
+                      style={{ background: '#4ade80', color: '#000', fontWeight: 700 }}
+                    >
+                      {downloadingPdf ? 'Downloading...' : '📥 Download PDF'}
+                    </button>
+                    {pdfBlobUrl && (
+                      <a
+                        href={pdfBlobUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-sm btn-secondary"
+                      >
+                        🖨️ Fullscreen / Print
+                      </a>
+                    )}
+                  </div>
+                </div>
+
                 {pdfBlobUrl ? (
-                  <iframe
-                    src={pdfBlobUrl}
-                    title="Code Breakers Final Rankings PDF"
-                    style={{
-                      width: '100%',
-                      height: '700px',
-                      border: 'none',
-                      borderRadius: '8px',
-                      background: '#ffffff',
-                    }}
-                  />
+                  <div>
+                    <iframe
+                      src={`${pdfBlobUrl}#view=FitH&toolbar=1`}
+                      title="Code Breakers Final Rankings PDF"
+                      style={{
+                        width: '100%',
+                        height: '750px',
+                        border: 'none',
+                        borderRadius: '8px',
+                        background: '#ffffff',
+                      }}
+                    />
+                    <div style={{ marginTop: '10px', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+                      💡 If your browser does not display the PDF preview above, you can{' '}
+                      <a
+                        href={pdfBlobUrl}
+                        download="CodeBreakers_Final_Rankings.pdf"
+                        style={{ color: '#4ade80', textDecoration: 'underline' }}
+                      >
+                        click here to download it directly
+                      </a>{' '}
+                      or{' '}
+                      <a
+                        href={pdfBlobUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: '#60a5fa', textDecoration: 'underline' }}
+                      >
+                        open in a new browser window
+                      </a>.
+                    </div>
+                  </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '400px', gap: '16px' }}>
                     <div className="spinner" />
                     <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>Loading official PDF ranking certificate...</p>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => prepareAndDownloadPdf(false)}
+                    >
+                      Click here to reload PDF
+                    </button>
                   </div>
                 )}
               </div>

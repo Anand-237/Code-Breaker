@@ -211,8 +211,16 @@ const getFinalResult = async (req, res) => {
       });
     }
 
-    // When all participants completed (or for admin), return leaderboard and my rank
+    // When all participants completed (or for admin), return leaderboard, my rank, and pre-generated Base64 PDF
     const myEntry = leaderboard.find((p) => p.userId === req.user._id.toString());
+
+    let pdfBase64 = null;
+    try {
+      const pdfBuffer = await generateRankingsPdf(leaderboard);
+      pdfBase64 = pdfBuffer.toString('base64');
+    } catch (pdfErr) {
+      console.error('Error generating pdfBase64 in getFinalResult:', pdfErr);
+    }
 
     res.json({
       allCompleted: true,
@@ -221,6 +229,7 @@ const getFinalResult = async (req, res) => {
       completedParticipants,
       myRank: myEntry ? myEntry.rank : null,
       leaderboard,
+      pdfBase64,
     });
   } catch (err) {
     console.error('getFinalResult error:', err);
@@ -244,7 +253,7 @@ const getRankingsPdf = async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename="CodeBreakers_Final_Rankings.pdf"');
     res.setHeader('Content-Length', pdfBuffer.length);
-    return res.send(pdfBuffer);
+    return res.end(pdfBuffer);
   } catch (err) {
     console.error('getRankingsPdf error:', err);
     res.status(500).json({ message: 'Failed to generate PDF' });
