@@ -3,20 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import api from '../api/axios'
 import { useAuth } from '../context/AuthContext'
 import GreenDustParticles from '../components/GreenDustParticles'
+import { downloadRankingsPdf, getRankingsPdfBlobUrl } from '../utils/clientPdfGenerator'
 
 const POLL_INTERVAL = 3000 // 3 seconds live poll while waiting for participants
-
-/**
- * Convert Base64 string to Uint8Array bytes
- */
-function base64ToUint8Array(base64Str) {
-  const byteCharacters = atob(base64Str)
-  const byteNumbers = new Array(byteCharacters.length)
-  for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i)
-  }
-  return new Uint8Array(byteNumbers)
-}
 
 export default function FinalResultPage() {
   const navigate = useNavigate()
@@ -25,55 +14,30 @@ export default function FinalResultPage() {
   const [loading, setLoading] = useState(true)
   const [resultData, setResultData] = useState(null)
   const [activeTab, setActiveTab] = useState('leaderboard') // 'leaderboard' | 'pdf'
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null)
+  const [pdfBlobUrl, setPdfBlobUrl] = useState(null)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   
   const autoDownloadedRef = useRef(false)
-  const pdfBytesRef = useRef(null)
 
-  // Direct download trigger using application/octet-stream for 100% reliable browser save
-  const handleDownloadPdf = useCallback(async () => {
+  // Direct client-side PDF download
+  const handleDownloadPdf = useCallback(() => {
     try {
       setDownloadingPdf(true)
-      let bytes = pdfBytesRef.current
-
-      if (!bytes && resultData?.pdfBase64) {
-        bytes = base64ToUint8Array(resultData.pdfBase64)
-        pdfBytesRef.current = bytes
+      const leaderboard = resultData?.leaderboard || []
+      const success = downloadRankingsPdf(leaderboard)
+      if (!success) {
+        // Fallback: direct server link
+        const token = sessionStorage.getItem('cb_token') || localStorage.getItem('cb_token')
+        const envUrl = import.meta.env.VITE_API_URL || '/api'
+        const baseApi = envUrl.replace(/\/$/, '').endsWith('/api') ? envUrl.replace(/\/$/, '') : `${envUrl.replace(/\/$/, '')}/api`
+        window.open(`${baseApi}/rounds/rankings-pdf?token=${token}`, '_blank')
       }
-
-      if (!bytes) {
-        const res = await api.get('/rounds/rankings-pdf', { responseType: 'arraybuffer' })
-        bytes = new Uint8Array(res.data)
-        pdfBytesRef.current = bytes
-      }
-
-      // Use octet-stream to guarantee browser opens file save prompt without suppressing
-      const blob = new Blob([bytes], { type: 'application/octet-stream' })
-      const downloadUrl = window.URL.createObjectURL(blob)
-
-      const link = document.createElement('a')
-      link.style.display = 'none'
-      link.href = downloadUrl
-      link.setAttribute('download', 'CodeBreakers_Final_Rankings.pdf')
-      document.body.appendChild(link)
-      link.click()
-
-      setTimeout(() => {
-        document.body.removeChild(link)
-        window.URL.revokeObjectURL(downloadUrl)
-      }, 3000)
     } catch (err) {
-      console.error('Download error:', err)
-      // Fallback: direct server URL
-      const token = sessionStorage.getItem('cb_token') || localStorage.getItem('cb_token')
-      const envUrl = import.meta.env.VITE_API_URL || '/api'
-      const baseApi = envUrl.replace(/\/$/, '').endsWith('/api') ? envUrl.replace(/\/$/, '') : `${envUrl.replace(/\/$/, '')}/api`
-      window.open(`${baseApi}/rounds/rankings-pdf?token=${token}`, '_blank')
+      console.error('PDF download error:', err)
     } finally {
-      setDownloadingPdf(false)
+      setTimeout(() => setDownloadingPdf(false), 500)
     }
-  }, [resultData?.pdfBase64])
+  }, [resultData?.leaderboard])
 
   // Fetch live contest completion & leaderboard status
   const fetchStatus = useCallback(async () => {
@@ -82,27 +46,24 @@ export default function FinalResultPage() {
       setResultData(data)
       setLoading(false)
 
-      // When all completed, initialize PDF blob and trigger auto-download once
+      // When all participants completed, generate PDF preview and trigger auto-download once
       if (data.allCompleted) {
-        let previewUrl = null
-        if (data.pdfBase64) {
-          const bytes = base64ToUint8Array(data.pdfBase64)
-          pdfBytesRef.current = bytes
-          const blob = new Blob([bytes], { type: 'application/pdf' })
-          previewUrl = window.URL.createObjectURL(blob)
-          setPdfPreviewUrl(previewUrl)
+        const leaderboard = data.leaderboard || []
+        const blobUrl = getRankingsPdfBlobUrl(leaderboard)
+        if (blobUrl) {
+          setPdfBlobUrl(blobUrl)
         }
 
         if (!autoDownloadedRef.current) {
           autoDownloadedRef.current = true
-          handleDownloadPdf()
+          downloadRankingsPdf(leaderboard)
         }
       }
     } catch (err) {
       console.error('Final result status error:', err)
       setLoading(false)
     }
-  }, [handleDownloadPdf])
+  }, [])
 
   // Auto-poll while not all completed
   useEffect(() => {
@@ -115,23 +76,15 @@ export default function FinalResultPage() {
     return () => clearInterval(timer)
   }, [fetchStatus, resultData?.allCompleted])
 
-  // Open PDF in new tab
-  const handleOpenPdfNewTab = () => {
-    if (pdfPreviewUrl) {
-      window.open(pdfPreviewUrl, '_blank')
-    } else if (resultData?.pdfBase64) {
-      const bytes = base64ToUint8Array(resultData.pdfBase64)
-      const blob = new Blob([bytes], { type: 'application/pdf' })
-      const url = window.URL.createObjectURL(blob)
-      setPdfPreviewUrl(url)
-      window.open(url, '_blank')
-    } else {
-      const token = sessionStorage.getItem('cb_token') || localStorage.getItem('cb_token')
-      const envUrl = import.meta.env.VITE_API_URL || '/api'
-      const baseApi = envUrl.replace(/\/$/, '').endsWith('/api') ? envUrl.replace(/\/$/, '') : `${envUrl.replace(/\/$/, '')}/api`
-      window.open(`${baseApi}/rounds/rankings-pdf?token=${token}`, '_blank')
+  // Update PDF preview blob when tab changes to pdf
+  useEffect(() => {
+    if (activeTab === 'pdf' && resultData?.leaderboard) {
+      const url = getRankingsPdfBlobUrl(resultData.leaderboard)
+      if (url) {
+        setPdfBlobUrl(url)
+      }
     }
-  }
+  }, [activeTab, resultData?.leaderboard])
 
   if (loading) {
     return (
@@ -154,11 +107,6 @@ export default function FinalResultPage() {
   const top1 = leaderboard[0]
   const top2 = leaderboard[1]
   const top3 = leaderboard[2]
-
-  const topScore = leaderboard.length > 0 ? leaderboard[0].totalScore : 0
-  const avgScore = leaderboard.length > 0
-    ? Math.round(leaderboard.reduce((acc, p) => acc + (p.totalScore || 0), 0) / leaderboard.length)
-    : 0
 
   const userToken = sessionStorage.getItem('cb_token') || localStorage.getItem('cb_token') || ''
   const directApiUrl = `/api/rounds/rankings-pdf?token=${userToken}`
@@ -327,22 +275,27 @@ export default function FinalResultPage() {
                   style={{
                     background: '#4ade80',
                     color: '#000',
-                    fontWeight: 700,
-                    boxShadow: '0 0 20px rgba(74, 222, 128, 0.4)',
-                    padding: '8px 22px',
-                    fontSize: '0.9rem',
+                    fontWeight: 800,
+                    boxShadow: '0 0 25px rgba(74, 222, 128, 0.45)',
+                    padding: '10px 24px',
+                    fontSize: '0.95rem',
+                    cursor: 'pointer',
                   }}
                 >
                   {downloadingPdf ? 'Downloading PDF...' : '📥 DOWNLOAD PDF CERTIFICATE'}
                 </button>
 
-                <button
-                  className="btn btn-secondary"
-                  onClick={handleOpenPdfNewTab}
-                  style={{ padding: '8px 20px', fontSize: '0.9rem' }}
-                >
-                  🖨️ OPEN IN NEW TAB / PRINT
-                </button>
+                {pdfBlobUrl && (
+                  <a
+                    href={pdfBlobUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-secondary"
+                    style={{ padding: '10px 20px', fontSize: '0.92rem' }}
+                  >
+                    🖨️ OPEN PDF IN NEW TAB
+                  </a>
+                )}
               </div>
             </div>
 
@@ -517,179 +470,70 @@ export default function FinalResultPage() {
 
             {/* TAB 2: EMBEDDED PDF DOCUMENT PREVIEW */}
             {activeTab === 'pdf' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {/* PDF Actions Header */}
-                <div
-                  className="card"
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '16px 20px',
-                    background: '#0f172a',
-                    border: '1px solid var(--border-subtle)',
-                    flexWrap: 'wrap',
-                    gap: '12px',
-                  }}
-                >
-                  <div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.9rem', color: '#4ade80', fontWeight: 700 }}>
-                      📄 Official PDF Rankings Certificate
-                    </div>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginTop: '2px' }}>
-                      Certified competition results compiled and signed for all participants
-                    </div>
+              <div className="card" style={{ padding: '16px', background: '#0f172a', border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.88rem', color: '#4ade80', fontWeight: 700 }}>
+                      📄 Official PDF Certificate Document
+                    </span>
                   </div>
-
-                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: '10px' }}>
                     <button
-                      className="btn btn-primary btn-sm"
+                      className="btn btn-sm btn-primary"
                       onClick={handleDownloadPdf}
                       disabled={downloadingPdf}
-                      style={{ background: '#4ade80', color: '#000', fontWeight: 700, padding: '8px 18px' }}
+                      style={{ background: '#4ade80', color: '#000', fontWeight: 700, padding: '8px 16px' }}
                     >
                       {downloadingPdf ? 'Downloading...' : '📥 DOWNLOAD PDF'}
                     </button>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={handleOpenPdfNewTab}
-                      style={{ padding: '8px 16px' }}
-                    >
-                      🖨️ Fullscreen / Print
-                    </button>
+                    {pdfBlobUrl && (
+                      <a
+                        href={pdfBlobUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-sm btn-secondary"
+                        style={{ padding: '8px 14px' }}
+                      >
+                        🖨️ Open in New Tab
+                      </a>
+                    )}
                   </div>
                 </div>
 
-                {/* Visual Certificate Preview Card */}
-                <div
-                  className="card"
-                  style={{
-                    background: '#0a0f1d',
-                    border: '2px solid rgba(74, 222, 128, 0.3)',
-                    borderRadius: '12px',
-                    padding: '32px 28px',
-                    boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
-                  }}
-                >
-                  {/* PDF Document Header */}
-                  <div
-                    style={{
-                      background: '#0f172a',
-                      padding: '24px',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(74, 222, 128, 0.2)',
-                      marginBottom: '24px',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                      gap: '16px',
-                    }}
-                  >
-                    <div>
-                      <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.6rem', color: '#4ade80', letterSpacing: '0.12em', margin: 0 }}>
-                        CODE BREAKERS
-                      </h2>
-                      <p style={{ fontFamily: 'var(--font-heading)', fontSize: '0.8rem', color: '#94a3b8', letterSpacing: '0.08em', marginTop: '4px' }}>
-                        OFFICIAL EVENT LEADERBOARD & FINAL PARTICIPANT RANKINGS
-                      </p>
-                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#64748b', marginTop: '6px' }}>
-                        Certified Event Results • Generated for Code Breakers 2026
-                      </p>
-                    </div>
-
-                    <div style={{ textAlign: 'right' }}>
-                      <span style={{ display: 'inline-block', padding: '6px 14px', borderRadius: '20px', background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.4)', color: '#4ade80', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', fontWeight: 700 }}>
-                        ✓ CERTIFIED AUTHENTIC
-                      </span>
-                    </div>
+                {pdfBlobUrl ? (
+                  <div style={{ width: '100%', borderRadius: '8px', overflow: 'hidden', background: '#fff' }}>
+                    <iframe
+                      src={pdfBlobUrl}
+                      title="Code Breakers Final Rankings PDF"
+                      style={{
+                        width: '100%',
+                        height: '750px',
+                        border: 'none',
+                        display: 'block',
+                      }}
+                    />
                   </div>
-
-                  {/* Summary KPI Cards */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '24px' }}>
-                    <div style={{ background: '#111827', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', padding: '16px' }}>
-                      <div style={{ fontFamily: 'var(--font-heading)', fontSize: '0.72rem', color: '#94a3b8', letterSpacing: '0.08em' }}>TOTAL PARTICIPANTS</div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.4rem', fontWeight: 800, color: '#3b82f6', marginTop: '4px' }}>{totalCount} TEAMS</div>
-                    </div>
-                    <div style={{ background: '#111827', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', padding: '16px' }}>
-                      <div style={{ fontFamily: 'var(--font-heading)', fontSize: '0.72rem', color: '#94a3b8', letterSpacing: '0.08em' }}>TOP SCORE (CHAMPION)</div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.4rem', fontWeight: 800, color: '#10b981', marginTop: '4px' }}>{topScore} / 100 PTS</div>
-                    </div>
-                    <div style={{ background: '#111827', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '8px', padding: '16px' }}>
-                      <div style={{ fontFamily: 'var(--font-heading)', fontSize: '0.72rem', color: '#94a3b8', letterSpacing: '0.08em' }}>AVERAGE SCORE</div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.4rem', fontWeight: 800, color: '#8b5cf6', marginTop: '4px' }}>{avgScore} / 100 PTS</div>
-                    </div>
-                  </div>
-
-                  {/* Official Table in Certificate */}
-                  <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', marginBottom: '24px' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-                      <thead>
-                        <tr style={{ background: '#1e293b', borderBottom: '1px solid var(--border-subtle)', color: '#f8fafc', fontFamily: 'var(--font-heading)', fontSize: '0.75rem', letterSpacing: '0.06em' }}>
-                          <th style={{ padding: '12px 14px', textAlign: 'center' }}>RANK</th>
-                          <th style={{ padding: '12px 14px' }}>TEAM / PARTICIPANT</th>
-                          <th style={{ padding: '12px 14px' }}>USERNAME</th>
-                          <th style={{ padding: '12px 14px', textAlign: 'center' }}>R1 (/30)</th>
-                          <th style={{ padding: '12px 14px', textAlign: 'center' }}>R2 (/30)</th>
-                          <th style={{ padding: '12px 14px', textAlign: 'center' }}>R3 (/40)</th>
-                          <th style={{ padding: '12px 14px', textAlign: 'center', color: '#4ade80' }}>TOTAL (/100)</th>
-                          <th style={{ padding: '12px 14px', textAlign: 'center' }}>ACCURACY</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {leaderboard.map((p, idx) => {
-                          const rank = idx + 1
-                          const isTop = rank <= 3
-                          return (
-                            <tr
-                              key={p.userId || idx}
-                              style={{
-                                background: rank === 1 ? 'rgba(250, 204, 21, 0.08)' : rank === 2 ? 'rgba(203, 213, 225, 0.05)' : rank === 3 ? 'rgba(251, 146, 60, 0.05)' : idx % 2 === 0 ? 'transparent' : 'rgba(255, 255, 255, 0.02)',
-                                borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-                              }}
-                            >
-                              <td style={{ padding: '12px 14px', textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: rank === 1 ? '#facc15' : rank === 2 ? '#cbd5e1' : rank === 3 ? '#fb923c' : '#94a3b8' }}>
-                                {rank === 1 ? '🥇 #1' : rank === 2 ? '🥈 #2' : rank === 3 ? '🥉 #3' : `#${rank}`}
-                              </td>
-                              <td style={{ padding: '12px 14px', fontWeight: isTop ? 700 : 500, color: '#f8fafc' }}>
-                                {p.teamName || p.name || p.username}
-                              </td>
-                              <td style={{ padding: '12px 14px', color: '#94a3b8', fontFamily: 'var(--font-mono)' }}>
-                                @{p.username}
-                              </td>
-                              <td style={{ padding: '12px 14px', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
-                                {p.roundScores?.[1] ?? 0}
-                              </td>
-                              <td style={{ padding: '12px 14px', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
-                                {p.roundScores?.[2] ?? 0}
-                              </td>
-                              <td style={{ padding: '12px 14px', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
-                                {p.roundScores?.[3] ?? 0}
-                              </td>
-                              <td style={{ padding: '12px 14px', textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#4ade80', fontSize: '0.95rem' }}>
-                                {p.totalScore}
-                              </td>
-                              <td style={{ padding: '12px 14px', textAlign: 'center', fontFamily: 'var(--font-mono)', color: '#94a3b8' }}>
-                                {Math.round((p.totalScore / 100) * 100)}%
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Document Footer */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px', color: '#64748b', fontSize: '0.75rem', fontFamily: 'var(--font-mono)', flexWrap: 'wrap', gap: '8px' }}>
-                    <span>Code Breakers Official Competition Results • Automated Certification System</span>
-                    <a
-                      href={directApiUrl}
-                      download="CodeBreakers_Final_Rankings.pdf"
-                      style={{ color: '#4ade80', textDecoration: 'underline' }}
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '400px', gap: '16px' }}>
+                    <div className="spinner" />
+                    <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>Loading official PDF ranking certificate...</p>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleDownloadPdf}
                     >
-                      Direct Server Download Link (.pdf)
-                    </a>
+                      Click here to Download PDF directly
+                    </button>
                   </div>
+                )}
+
+                <div style={{ marginTop: '14px', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+                  💡 Having trouble viewing the PDF preview?{' '}
+                  <button
+                    onClick={handleDownloadPdf}
+                    style={{ background: 'none', border: 'none', color: '#4ade80', textDecoration: 'underline', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}
+                  >
+                    Click here to save the PDF file directly to your device
+                  </button>.
                 </div>
               </div>
             )}

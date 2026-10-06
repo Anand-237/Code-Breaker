@@ -11,6 +11,8 @@
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "axios": "^1.7.9",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.5",
