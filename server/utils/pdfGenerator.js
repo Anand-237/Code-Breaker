@@ -90,14 +90,14 @@ function generateRankingsPdf(leaderboard = [], options = {}) {
       // ─── 3. RANKINGS TABLE ────────────────────────────────────────────────
       let startY = 175;
       const tableHeaders = [
-        { title: 'RANK', width: 45, align: 'center' },
-        { title: 'TEAM / PARTICIPANT', width: 140, align: 'left' },
-        { title: 'USERNAME', width: 85, align: 'left' },
-        { title: 'R1 (/30)', width: 50, align: 'center' },
-        { title: 'R2 (/30)', width: 50, align: 'center' },
-        { title: 'R3 (/40)', width: 50, align: 'center' },
-        { title: 'TOTAL (/100)', width: 65, align: 'center' },
-        { title: 'ACCURACY', width: 40, align: 'center' },
+        { title: 'RANK', width: 62, align: 'center' },
+        { title: 'TEAM / PARTICIPANT', width: 130, align: 'left' },
+        { title: 'USERNAME', width: 80, align: 'left' },
+        { title: 'R1 (/30)', width: 48, align: 'center' },
+        { title: 'R2 (/30)', width: 48, align: 'center' },
+        { title: 'R3 (/40)', width: 48, align: 'center' },
+        { title: 'TOTAL (/100)', width: 60, align: 'center' },
+        { title: 'ACCURACY', width: 49, align: 'center' },
       ];
 
       // Table Header Row
@@ -136,9 +136,9 @@ function generateRankingsPdf(leaderboard = [], options = {}) {
 
         // Rank column
         let rankText = `#${rank}`;
-        if (rank === 1) rankText = '1 [GOLD]';
-        else if (rank === 2) rankText = '2 [SLV]';
-        else if (rank === 3) rankText = '3 [BRZ]';
+        if (rank === 1) rankText = '#1 (GOLD)';
+        else if (rank === 2) rankText = '#2 (SILVER)';
+        else if (rank === 3) rankText = '#3 (BRONZE)';
 
         doc.font(isTop3 ? 'Helvetica-Bold' : 'Helvetica')
           .fillColor(rank === 1 ? '#b45309' : rank === 2 ? '#475569' : rank === 3 ? '#c2410c' : '#1e293b')

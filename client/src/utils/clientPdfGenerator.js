@@ -114,9 +114,9 @@ export function buildRankingsPdfDoc(leaderboard = []) {
   const tableData = validLeaderboard.map((p, idx) => {
     const rank = idx + 1
     let rankLabel = `#${rank}`
-    if (rank === 1) rankLabel = '🥇 #1 (GOLD)'
-    else if (rank === 2) rankLabel = '🥈 #2 (SILVER)'
-    else if (rank === 3) rankLabel = '🥉 #3 (BRONZE)'
+    if (rank === 1) rankLabel = '#1 (GOLD)'
+    else if (rank === 2) rankLabel = '#2 (SILVER)'
+    else if (rank === 3) rankLabel = '#3 (BRONZE)'
 
     const r1 = p.roundScores ? (p.roundScores[1] ?? 0) : (p.r1 ?? 0)
     const r2 = p.roundScores ? (p.roundScores[2] ?? 0) : (p.r2 ?? 0)
@@ -161,24 +161,27 @@ export function buildRankingsPdfDoc(leaderboard = []) {
       halign: 'center',
     },
     columnStyles: {
-      0: { halign: 'center', fontStyle: 'bold', cellWidth: 80 },
-      1: { halign: 'left', fontStyle: 'bold', cellWidth: 'auto' },
-      2: { halign: 'left', textColor: [100, 116, 139] },
-      3: { halign: 'center' },
-      4: { halign: 'center' },
-      5: { halign: 'center' },
-      6: { halign: 'center', fontStyle: 'bold', textColor: [5, 150, 105] },
-      7: { halign: 'center', textColor: [100, 116, 139] },
+      0: { halign: 'center', fontStyle: 'bold', cellWidth: 70 },
+      1: { halign: 'left', fontStyle: 'bold' },
+      2: { halign: 'left', textColor: [100, 116, 139], cellWidth: 80 },
+      3: { halign: 'center', cellWidth: 46 },
+      4: { halign: 'center', cellWidth: 46 },
+      5: { halign: 'center', cellWidth: 46 },
+      6: { halign: 'center', fontStyle: 'bold', textColor: [5, 150, 105], cellWidth: 60 },
+      7: { halign: 'center', textColor: [100, 116, 139], cellWidth: 50 },
     },
     didParseCell: (data) => {
       // Shading for Gold, Silver, Bronze
       if (data.section === 'body') {
         if (data.row.index === 0) {
           data.cell.styles.fillColor = [254, 252, 232] // gold row highlight
+          if (data.column.index === 0) data.cell.styles.textColor = [180, 83, 9] // amber gold text
         } else if (data.row.index === 1) {
           data.cell.styles.fillColor = [241, 245, 249] // silver row highlight
+          if (data.column.index === 0) data.cell.styles.textColor = [71, 85, 105] // slate silver text
         } else if (data.row.index === 2) {
           data.cell.styles.fillColor = [255, 247, 237] // bronze row highlight
+          if (data.column.index === 0) data.cell.styles.textColor = [194, 65, 12] // bronze text
         }
       }
     },
