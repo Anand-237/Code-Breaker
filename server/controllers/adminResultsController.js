@@ -37,22 +37,8 @@ const getResults = async (req, res) => {
     submissions.forEach((sub) => {
       if (!sub.userId) return;
       const uid = String(sub.userId._id || sub.userId.id || sub.userId);
-      const uName = typeof sub.userId === 'object' ? sub.userId.name : '';
-      const uUsername = typeof sub.userId === 'object' ? sub.userId.username : '';
-      const uTeam = typeof sub.userId === 'object' ? (sub.userId.teamName || sub.userId.name || sub.userId.username) : '';
+      if (!userMap[uid]) return; // Ignore submissions from deleted/non-participant users
 
-      if (!userMap[uid]) {
-        userMap[uid] = {
-          userId: uid,
-          name: uName,
-          username: uUsername,
-          teamName: uTeam || uUsername || 'Unknown',
-          rounds: [],
-          roundScores: { 1: 0, 2: 0, 3: 0 },
-          cumulative: 0,
-          earliestSubmit: sub.submittedAt,
-        };
-      }
       userMap[uid].roundScores[sub.round] = sub.totalScore;
       userMap[uid].rounds.push({
         round: sub.round,
@@ -69,20 +55,24 @@ const getResults = async (req, res) => {
       }
     });
 
-    const leaderboard = Object.values(userMap).sort((a, b) => {
-      if (b.cumulative !== a.cumulative) return b.cumulative - a.cumulative;
-      if (a.earliestSubmit && b.earliestSubmit) {
-        return new Date(a.earliestSubmit) - new Date(b.earliestSubmit);
-      }
-      if (a.earliestSubmit) return -1;
-      if (b.earliestSubmit) return 1;
-      return 0;
-    });
+    const leaderboard = Object.values(userMap)
+      .filter((p) => p.username || p.name || p.teamName)
+      .sort((a, b) => {
+        if (b.cumulative !== a.cumulative) return b.cumulative - a.cumulative;
+        if (a.earliestSubmit && b.earliestSubmit) {
+          return new Date(a.earliestSubmit) - new Date(b.earliestSubmit);
+        }
+        if (a.earliestSubmit) return -1;
+        if (b.earliestSubmit) return 1;
+        return 0;
+      });
 
-    // Round 3 pending-review queue
-    const pendingReviews = await Submission.find({ round: 3, status: 'pending-review' })
+    // Round 3 pending-review queue (filter out orphaned users)
+    const rawPendingReviews = await Submission.find({ round: 3, status: 'pending-review' })
       .populate('userId', 'name username teamName')
       .populate({ path: 'answers.questionId', model: 'Round3Question', select: 'title buggyCode language expectedOutput points' });
+
+    const pendingReviews = rawPendingReviews.filter((r) => r.userId && (r.userId.name || r.userId.username || r.userId.teamName));
 
     res.json({ leaderboard, pendingReviews });
   } catch (err) {

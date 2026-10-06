@@ -92,12 +92,14 @@ const getEventLeaderboard = async () => {
     .select('name username teamName')
     .sort({ createdAt: 1 });
 
+  const validParticipants = participants.filter((p) => p && (p.teamName || p.name || p.username));
+
   const submissions = await Submission.find({ status: { $in: ['submitted', 'pending-review'] } })
     .populate('userId', 'name username teamName')
     .sort({ submittedAt: 1 });
 
   const userMap = {};
-  participants.forEach((p) => {
+  validParticipants.forEach((p) => {
     const uid = p._id.toString();
     userMap[uid] = {
       userId: uid,
@@ -141,7 +143,7 @@ const getEventLeaderboard = async () => {
     }
   });
 
-  const totalParticipants = participants.length;
+  const totalParticipants = validParticipants.length;
   const allCompleted = totalParticipants > 0 && completedParticipants >= totalParticipants;
 
   const leaderboard = Object.values(userMap).map((u) => ({

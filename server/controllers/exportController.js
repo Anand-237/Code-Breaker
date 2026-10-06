@@ -29,14 +29,19 @@ const exportRound = async (req, res) => {
     const submissions = await Submission.find({ round, status: { $in: ['submitted', 'pending-review'] } })
       .populate('userId', 'name username teamName');
 
+    // Filter out submissions where userId is deleted or missing
+    const validSubmissions = submissions.filter((sub) => sub.userId && (sub.userId.teamName || sub.userId.name || sub.userId.username));
+
     const QuestionModel = QUESTION_MODELS[round];
     const questions = await QuestionModel.find({ isActive: true }).sort({ order: 1 });
     const questionMap = {};
     questions.forEach((q) => (questionMap[q._id.toString()] = q));
 
-    const rows = submissions.map((sub) => {
+    const rows = validSubmissions.map((sub) => {
+      const teamName = sub.userId.teamName || sub.userId.name || sub.userId.username;
       const row = {
-        'Team Name': sub.userId?.teamName || sub.userId?.name || sub.userId?.username || 'Unknown',
+        'Team Name': teamName,
+        'Username': sub.userId.username || '',
         'Total Score': sub.totalScore,
         Status: sub.status,
         'Submitted At': sub.submittedAt ? sub.submittedAt.toISOString() : '',
@@ -54,8 +59,9 @@ const exportRound = async (req, res) => {
     const filename = `round${round}_results`;
 
     if (format === 'csv') {
-      const parser = new Parser();
-      const csv = parser.parse(rows);
+      const csv = rows.length > 0
+        ? new Parser().parse(rows)
+        : 'Team Name,Username,Total Score,Status,Submitted At\n';
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}.csv"`);
       return res.send(csv);
@@ -93,22 +99,26 @@ const exportOverall = async (req, res) => {
   try {
     const format = req.query.format || 'xlsx';
     const participants = await User.find({ role: 'participant', isActive: true });
+    const validParticipants = participants.filter((p) => p && (p.teamName || p.name || p.username));
+
     const submissions = await Submission.find({ status: { $in: ['submitted', 'pending-review'] } })
       .populate('userId', 'name username teamName');
 
     const subMap = {};
     submissions.forEach((sub) => {
-      const uid = sub.userId?._id?.toString();
+      const uid = sub.userId?._id?.toString() || sub.userId?.id?.toString() || (typeof sub.userId === 'string' ? sub.userId : null);
       if (!uid) return;
       if (!subMap[uid]) subMap[uid] = { r1: 0, r2: 0, r3: 0 };
       subMap[uid][`r${sub.round}`] = sub.totalScore;
     });
 
-    const rows = participants.map((p) => {
+    const rows = validParticipants.map((p) => {
       const uid = p._id.toString();
       const scores = subMap[uid] || { r1: 0, r2: 0, r3: 0 };
+      const teamName = p.teamName || p.name || p.username;
       return {
-        'Team Name': p.teamName || p.name || p.username,
+        'Team Name': teamName,
+        'Username': p.username || '',
         'Round 1 Score': scores.r1,
         'Round 2 Score': scores.r2,
         'Round 3 Score': scores.r3,
@@ -117,8 +127,9 @@ const exportOverall = async (req, res) => {
     }).sort((a, b) => b['Cumulative Score'] - a['Cumulative Score']);
 
     if (format === 'csv') {
-      const parser = new Parser();
-      const csv = parser.parse(rows);
+      const csv = rows.length > 0
+        ? new Parser().parse(rows)
+        : 'Team Name,Username,Round 1 Score,Round 2 Score,Round 3 Score,Cumulative Score\n';
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename="overall_results.csv"');
       return res.send(csv);

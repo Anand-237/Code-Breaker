@@ -9,6 +9,9 @@ const PDFDocument = require('pdfkit');
 function generateRankingsPdf(leaderboard = [], options = {}) {
   return new Promise((resolve, reject) => {
     try {
+      // Filter out invalid/empty entries so "Unknown" is never shown
+      const validLeaderboard = (leaderboard || []).filter((p) => p && (p.teamName || p.name || p.username));
+
       const doc = new PDFDocument({
         size: 'A4',
         margin: 36,
@@ -25,10 +28,10 @@ function generateRankingsPdf(leaderboard = [], options = {}) {
         resolve(Buffer.concat(buffers));
       });
 
-      const totalParticipants = leaderboard.length;
-      const topScore = leaderboard.length > 0 ? (leaderboard[0].totalScore ?? leaderboard[0].cumulative ?? 0) : 0;
-      const avgScore = leaderboard.length > 0
-        ? Math.round(leaderboard.reduce((acc, p) => acc + (p.totalScore ?? p.cumulative ?? 0), 0) / totalParticipants)
+      const totalParticipants = validLeaderboard.length;
+      const topScore = validLeaderboard.length > 0 ? (validLeaderboard[0].totalScore ?? validLeaderboard[0].cumulative ?? 0) : 0;
+      const avgScore = validLeaderboard.length > 0
+        ? Math.round(validLeaderboard.reduce((acc, p) => acc + (p.totalScore ?? p.cumulative ?? 0), 0) / totalParticipants)
         : 0;
 
       // ─── 1. HEADER SECTION ────────────────────────────────────────────────
@@ -109,7 +112,7 @@ function generateRankingsPdf(leaderboard = [], options = {}) {
 
       let rowY = startY + 22;
 
-      leaderboard.forEach((p, idx) => {
+      validLeaderboard.forEach((p, idx) => {
         const rank = idx + 1;
         const isTop3 = rank <= 3;
         const rowHeight = 22;
@@ -143,7 +146,7 @@ function generateRankingsPdf(leaderboard = [], options = {}) {
         colX += tableHeaders[0].width;
 
         // Team Name
-        const teamName = p.teamName || p.name || p.username || 'Unknown';
+        const teamName = p.teamName || p.name || p.username;
         doc.font(isTop3 ? 'Helvetica-Bold' : 'Helvetica')
           .fillColor('#0f172a')
           .text(
