@@ -11,6 +11,18 @@ const { generateRankingsPdf } = require('../utils/pdfGenerator');
 /** Normalize a string answer for comparison (trim + lowercase) */
 const normalize = (str) => String(str ?? '').trim().toLowerCase();
 
+/**
+ * Fisher-Yates array shuffle algorithm to randomize question order uniquely per participant.
+ */
+const shuffleArray = (arr) => {
+  const array = [...arr];
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+};
+
 /** Check if round is unlocked, participant hasn't submitted, and deadline not passed */
 const checkRoundAccess = async (userId, roundNum) => {
   const control = await RoundControl.findOne({ round: roundNum });
@@ -250,10 +262,13 @@ const getRound1Questions = async (req, res) => {
 
     const inProgress = await Submission.findOne({ userId: req.user._id, round: 1, status: 'in-progress' });
     if (inProgress) {
-      const questionIds = inProgress.answers.map((a) => a.questionId);
+      const questionIds = inProgress.answers.map((a) => String(a.questionId?._id || a.questionId?.id || a.questionId));
       const questions = await Question.find({ _id: { $in: questionIds }, round: 1, isActive: true })
-        .select('-correctOptionIndex -correctAnswer')
-        .sort({ order: 1 });
+        .select('-correctOptionIndex -correctAnswer');
+
+      const qMap = {};
+      questions.forEach((q) => (qMap[String(q._id || q.id)] = q));
+      const orderedQuestions = questionIds.map((id) => qMap[id]).filter(Boolean);
 
       const ctrl = await RoundControl.findOne({ round: 1 });
       let timeRemainingSeconds = null;
@@ -263,7 +278,7 @@ const getRound1Questions = async (req, res) => {
       }
 
       return res.json({
-        questions,
+        questions: orderedQuestions,
         startedAt: inProgress.startedAt,
         roundControl: {
           durationMinutes: ctrl?.durationMinutes || null,
@@ -273,13 +288,13 @@ const getRound1Questions = async (req, res) => {
       });
     }
 
-    // Fresh start: fetch active Round 1 questions (up to 15)
-    const questions = await Question.find({ round: 1, isActive: true })
-      .select('-correctOptionIndex -correctAnswer')
-      .sort({ order: 1, createdAt: 1 })
-      .limit(ROUND_CONFIG[1].maxQuestions);
+    // Fresh start: fetch active Round 1 questions, shuffle uniquely for this participant
+    const allQuestions = await Question.find({ round: 1, isActive: true })
+      .select('-correctOptionIndex -correctAnswer');
 
-    // Create in-progress submission record
+    const questions = shuffleArray(allQuestions).slice(0, ROUND_CONFIG[1].maxQuestions);
+
+    // Create in-progress submission record to lock in this participant's shuffled question sequence
     await Submission.create({
       userId: req.user._id,
       round: 1,
@@ -381,10 +396,48 @@ const getRound2Questions = async (req, res) => {
       return res.status(access.status).json({ message: access.reason });
     }
 
-    const questions = await Question.find({ round: 2, isActive: true })
-      .select('-correctOutput -correctAnswer -correctOptionIndex -java.answer -python.answer')
-      .sort({ order: 1, createdAt: 1 })
-      .limit(ROUND_CONFIG[2].maxQuestions);
+    const inProgress = await Submission.findOne({ userId: req.user._id, round: 2, status: 'in-progress' });
+    if (inProgress) {
+      const questionIds = inProgress.answers.map((a) => String(a.questionId?._id || a.questionId?.id || a.questionId));
+      const questions = await Question.find({ _id: { $in: questionIds }, round: 2, isActive: true })
+        .select('-correctOutput -correctAnswer -correctOptionIndex -java.answer -python.answer');
+
+      const qMap = {};
+      questions.forEach((q) => (qMap[String(q._id || q.id)] = q));
+      const orderedQuestions = questionIds.map((id) => qMap[id]).filter(Boolean);
+
+      const ctrl = await RoundControl.findOne({ round: 2 });
+      let timeRemainingSeconds = null;
+      if (ctrl && ctrl.isUnlocked && ctrl.durationMinutes && ctrl.unlockedAt) {
+        const elapsed = (Date.now() - new Date(ctrl.unlockedAt).getTime()) / 1000;
+        timeRemainingSeconds = Math.max(0, Math.floor(ctrl.durationMinutes * 60 - elapsed));
+      }
+
+      return res.json({
+        questions: orderedQuestions,
+        startedAt: inProgress.startedAt,
+        roundControl: {
+          durationMinutes: ctrl?.durationMinutes || null,
+          unlockedAt: ctrl?.unlockedAt || null,
+          timeRemainingSeconds,
+        },
+      });
+    }
+
+    // Fresh start: fetch active Round 2 questions, shuffle uniquely for this participant
+    const allQuestions = await Question.find({ round: 2, isActive: true })
+      .select('-correctOutput -correctAnswer -correctOptionIndex -java.answer -python.answer');
+
+    const questions = shuffleArray(allQuestions).slice(0, ROUND_CONFIG[2].maxQuestions);
+
+    // Create in-progress submission record to lock in this participant's shuffled question sequence
+    await Submission.create({
+      userId: req.user._id,
+      round: 2,
+      answers: questions.map((q) => ({ questionId: q._id, submittedAnswer: null, isCorrect: false, pointsAwarded: 0 })),
+      status: 'in-progress',
+      startedAt: new Date(),
+    });
 
     const ctrl = await RoundControl.findOne({ round: 2 });
     let timeRemainingSeconds = null;
@@ -395,6 +448,7 @@ const getRound2Questions = async (req, res) => {
 
     res.json({
       questions,
+      startedAt: new Date(),
       roundControl: {
         durationMinutes: ctrl?.durationMinutes || null,
         unlockedAt: ctrl?.unlockedAt || null,
@@ -410,7 +464,7 @@ const getRound2Questions = async (req, res) => {
 const submitRound2 = async (req, res) => {
   try {
     const access = await checkRoundAccess(req.user._id, 2);
-    if (!access.allowed && access.status === 409) {
+    if (!access.allowed && access.status !== 409) {
       return res.status(409).json({ message: 'Already submitted for Round 2', submission: access.submission });
     }
     if (!access.allowed) {
@@ -483,10 +537,48 @@ const getRound3Questions = async (req, res) => {
       return res.status(access.status).json({ message: access.reason });
     }
 
-    const questions = await Question.find({ round: 3, isActive: true })
-      .select('-hiddenInput -hiddenExpectedOutput -hiddenAnswer -java.hiddenInput -java.hiddenAnswer -java.hiddenInput2 -java.hiddenAnswer2 -python.hiddenInput -python.hiddenAnswer -python.hiddenInput2 -python.hiddenAnswer2 -explanation -java.correctCode -python.correctCode')
-      .sort({ order: 1, createdAt: 1 })
-      .limit(ROUND_CONFIG[3].maxQuestions);
+    const inProgress = await Submission.findOne({ userId: req.user._id, round: 3, status: 'in-progress' });
+    if (inProgress) {
+      const questionIds = inProgress.answers.map((a) => String(a.questionId?._id || a.questionId?.id || a.questionId));
+      const questions = await Question.find({ _id: { $in: questionIds }, round: 3, isActive: true })
+        .select('-hiddenInput -hiddenExpectedOutput -hiddenAnswer -java.hiddenInput -java.hiddenAnswer -java.hiddenInput2 -java.hiddenAnswer2 -python.hiddenInput -python.hiddenAnswer -python.hiddenInput2 -python.hiddenAnswer2 -explanation -java.correctCode -python.correctCode');
+
+      const qMap = {};
+      questions.forEach((q) => (qMap[String(q._id || q.id)] = q));
+      const orderedQuestions = questionIds.map((id) => qMap[id]).filter(Boolean);
+
+      const ctrl = await RoundControl.findOne({ round: 3 });
+      let timeRemainingSeconds = null;
+      if (ctrl && ctrl.isUnlocked && ctrl.durationMinutes && ctrl.unlockedAt) {
+        const elapsed = (Date.now() - new Date(ctrl.unlockedAt).getTime()) / 1000;
+        timeRemainingSeconds = Math.max(0, Math.floor(ctrl.durationMinutes * 60 - elapsed));
+      }
+
+      return res.json({
+        questions: orderedQuestions,
+        startedAt: inProgress.startedAt,
+        roundControl: {
+          durationMinutes: ctrl?.durationMinutes || null,
+          unlockedAt: ctrl?.unlockedAt || null,
+          timeRemainingSeconds,
+        },
+      });
+    }
+
+    // Fresh start: fetch active Round 3 questions, shuffle uniquely for this participant
+    const allQuestions = await Question.find({ round: 3, isActive: true })
+      .select('-hiddenInput -hiddenExpectedOutput -hiddenAnswer -java.hiddenInput -java.hiddenAnswer -java.hiddenInput2 -java.hiddenAnswer2 -python.hiddenInput -python.hiddenAnswer -python.hiddenInput2 -python.hiddenAnswer2 -explanation -java.correctCode -python.correctCode');
+
+    const questions = shuffleArray(allQuestions).slice(0, ROUND_CONFIG[3].maxQuestions);
+
+    // Create in-progress submission record to lock in this participant's shuffled question sequence
+    await Submission.create({
+      userId: req.user._id,
+      round: 3,
+      answers: questions.map((q) => ({ questionId: q._id, submittedAnswer: null, isCorrect: false, pointsAwarded: 0 })),
+      status: 'in-progress',
+      startedAt: new Date(),
+    });
 
     const ctrl = await RoundControl.findOne({ round: 3 });
     let timeRemainingSeconds = null;
@@ -497,6 +589,7 @@ const getRound3Questions = async (req, res) => {
 
     res.json({
       questions,
+      startedAt: new Date(),
       roundControl: {
         durationMinutes: ctrl?.durationMinutes || null,
         unlockedAt: ctrl?.unlockedAt || null,
