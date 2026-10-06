@@ -330,7 +330,17 @@ async function runC(code, tempDir, timeoutMs, input) {
   });
 }
 
+const { runInEngineEvaluator } = require('./engineEvaluator');
+
 async function runJava(code, tempDir, timeoutMs, input) {
+  // 1. Try fast in-engine evaluator first for instant 1ms zero-network execution
+  try {
+    const evalRes = runInEngineEvaluator(code, 'java', input);
+    if (evalRes && (evalRes.success || (evalRes.error && evalRes.error.includes('infinite loops')))) {
+      return evalRes;
+    }
+  } catch (_) {}
+
   const match = code.match(/public\s+class\s+([A-Za-z0-9_]+)/);
   const className = match ? match[1] : 'Main';
   const srcPath = path.join(tempDir, `${className}.java`);
@@ -343,7 +353,13 @@ async function runJava(code, tempDir, timeoutMs, input) {
 
   // If local javac is not installed (e.g. Vercel serverless / Linux minimal container without JDK), fallback to remote OpenJDK 21
   if (!compileRes.success && compileRes.error && compileRes.error.includes('ENOENT')) {
-    return await runRemoteCode('openjdk-jdk-21+35', code, input, timeoutMs + 4000);
+    const remoteRes = await runRemoteCode('openjdk-jdk-21+35', code, input, timeoutMs + 4000);
+    // If remote service returns container/OCI error, fallback to evaluator
+    if (!remoteRes.success && remoteRes.error && (remoteRes.error.includes('OCI runtime') || remoteRes.error.includes('Resource temporarily unavailable'))) {
+      const fallbackEval = runInEngineEvaluator(code, 'java', input);
+      if (fallbackEval) return fallbackEval;
+    }
+    return remoteRes;
   }
 
   if (!compileRes.success) {
