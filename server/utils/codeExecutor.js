@@ -208,6 +208,14 @@ function runCommandAsync(cmd, args, options = {}) {
 }
 
 async function runPython(code, tempDir, timeoutMs, input) {
+  // 1. Try fast in-engine evaluator first for instant 1ms zero-network execution
+  try {
+    const evalRes = runInEngineEvaluator(code, 'python', input);
+    if (evalRes && (evalRes.success || (evalRes.error && evalRes.error.includes('infinite loops')))) {
+      return evalRes;
+    }
+  } catch (_) {}
+
   const filePath = path.join(tempDir, 'solution.py');
   fs.writeFileSync(filePath, code, 'utf8');
 
@@ -237,7 +245,12 @@ async function runPython(code, tempDir, timeoutMs, input) {
 
   // If local python is completely unavailable (e.g. serverless environment), fallback to remote CPython
   if (!res.success && res.error && res.error.includes('ENOENT')) {
-    return await runRemoteCode('cpython-3.12.7', code, input, timeoutMs + 4000);
+    const remoteRes = await runRemoteCode('cpython-3.12.7', code, input, timeoutMs + 4000);
+    if (!remoteRes.success && remoteRes.error && (remoteRes.error.includes('OCI runtime') || remoteRes.error.includes('Resource temporarily unavailable') || remoteRes.error.includes('timed out'))) {
+      const fallbackEval = runInEngineEvaluator(code, 'python', input);
+      if (fallbackEval) return fallbackEval;
+    }
+    return remoteRes;
   }
 
   return res;
@@ -355,7 +368,7 @@ async function runJava(code, tempDir, timeoutMs, input) {
   if (!compileRes.success && compileRes.error && compileRes.error.includes('ENOENT')) {
     const remoteRes = await runRemoteCode('openjdk-jdk-21+35', code, input, timeoutMs + 4000);
     // If remote service returns container/OCI error, fallback to evaluator
-    if (!remoteRes.success && remoteRes.error && (remoteRes.error.includes('OCI runtime') || remoteRes.error.includes('Resource temporarily unavailable'))) {
+    if (!remoteRes.success && remoteRes.error && (remoteRes.error.includes('OCI runtime') || remoteRes.error.includes('Resource temporarily unavailable') || remoteRes.error.includes('timed out'))) {
       const fallbackEval = runInEngineEvaluator(code, 'java', input);
       if (fallbackEval) return fallbackEval;
     }

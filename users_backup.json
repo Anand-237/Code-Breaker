@@ -7,10 +7,29 @@
     "role": "admin",
     "teamName": "Event Admin",
     "isActive": true,
-    "createdAt": {
-      "_seconds": 1790413912,
-      "_nanoseconds": 268000000
-    },
-    "updatedAt": "2026-10-05T17:33:48.717Z"
+    "createdAt": "2026-09-26T09:11:52.268Z",
+    "updatedAt": "2026-10-05T17:00:39.773Z"
+  },
+  {
+    "_id": "HPCFLAHPPEx902QrSZ9u",
+    "name": "rakesh",
+    "username": "rakesh",
+    "password": "$2a$12$6EBQOgWjdouDvReXwf4o8OIjymW3ryF964QnY3HYqh/5SAjg/mhbG",
+    "role": "participant",
+    "teamName": "rakesh",
+    "isActive": true,
+    "createdAt": "2026-10-05T17:57:23.479Z",
+    "updatedAt": "2026-10-05T17:57:23.479Z"
+  },
+  {
+    "_id": "NjCxmFB1J5m0cseJXbEt",
+    "name": "anand",
+    "username": "anand",
+    "password": "$2a$12$7GodlSDyYyd8OV4qnz74JOlIWc1Z3dNvY7mB.erJ3qo/T4JYbLQQW",
+    "role": "participant",
+    "teamName": "anand",
+    "isActive": true,
+    "createdAt": "2026-10-05T17:56:31.424Z",
+    "updatedAt": "2026-10-05T17:56:31.424Z"
   }
 ]
