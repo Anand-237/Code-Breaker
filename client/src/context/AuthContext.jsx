@@ -5,7 +5,11 @@ const AuthContext = createContext(null)
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
-  const [token, setToken] = useState(() => localStorage.getItem('cb_token'))
+  const [token, setToken] = useState(() => {
+    // Clear legacy localStorage token so stale sessions do not persist across users
+    try { localStorage.removeItem('cb_token') } catch (_) {}
+    try { return sessionStorage.getItem('cb_token') || null } catch (_) { return null }
+  })
   const [loading, setLoading] = useState(true)
 
   // Bootstrap user from stored token on app load
@@ -20,7 +24,10 @@ export const AuthProvider = ({ children }) => {
         setUser(data.user)
       } catch {
         // Token invalid/expired
-        localStorage.removeItem('cb_token')
+        try {
+          sessionStorage.removeItem('cb_token')
+          localStorage.removeItem('cb_token')
+        } catch (_) {}
         setToken(null)
         setUser(null)
       } finally {
@@ -32,7 +39,10 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     const { data } = await api.post('/auth/login', { username, password })
-    localStorage.setItem('cb_token', data.token)
+    try {
+      sessionStorage.setItem('cb_token', data.token)
+      localStorage.removeItem('cb_token')
+    } catch (_) {}
     setToken(data.token)
     setUser(data.user)
     return data.user
@@ -40,7 +50,10 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try { await api.post('/auth/logout') } catch { /* ignore */ }
-    localStorage.removeItem('cb_token')
+    try {
+      sessionStorage.removeItem('cb_token')
+      localStorage.removeItem('cb_token')
+    } catch (_) {}
     setToken(null)
     setUser(null)
   }

@@ -14,7 +14,10 @@ const api = axios.create({
 
 // Attach token to every request
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('cb_token')
+  let token = null
+  try {
+    token = sessionStorage.getItem('cb_token') || localStorage.getItem('cb_token')
+  } catch (_) {}
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -28,7 +31,10 @@ api.interceptors.response.use(
   (err) => {
     const isLoginRequest = err.config?.url?.includes('/auth/login')
     if (err.response?.status === 401 && !isLoginRequest) {
-      localStorage.removeItem('cb_token')
+      try {
+        sessionStorage.removeItem('cb_token')
+        localStorage.removeItem('cb_token')
+      } catch (_) {}
       window.location.href = '/login'
     }
     return Promise.reject(err)

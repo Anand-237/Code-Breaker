@@ -146,6 +146,15 @@ export default function HomePage() {
         <div />
 
         <div className={`home-nav-user ${introPhase === 'receding' ? 'entry-right' : ''}`}>
+          {user?.role === 'admin' && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => navigate('/admin/round-control')}
+              style={{ borderColor: 'var(--amber-warn)', color: 'var(--amber-warn)', fontSize: '0.75rem' }}
+            >
+              ⚙️ ADMIN PANEL
+            </button>
+          )}
           {allSubmitted && (
             <button
               className="btn btn-primary btn-sm"

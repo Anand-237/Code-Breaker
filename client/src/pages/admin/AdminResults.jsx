@@ -42,7 +42,8 @@ export default function AdminResults() {
       if (format === 'pdf') {
         url = '/api/admin/export/pdf'
       }
-      const response = await fetch(url, { headers: { Authorization: `Bearer ${localStorage.getItem('cb_token')}` } })
+      const token = sessionStorage.getItem('cb_token') || localStorage.getItem('cb_token')
+      const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       if (!response.ok) throw new Error('Export failed')
       const blob = await response.blob()
       const a = document.createElement('a')

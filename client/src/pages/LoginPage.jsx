@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 
 export default function LoginPage() {
-  const { login, user } = useAuth()
+  const { login, logout, user } = useAuth()
   const navigate = useNavigate()
   const toast = useToast()
   const videoRef = useRef(null)
@@ -33,11 +33,6 @@ export default function LoginPage() {
       }
     }
   }, [isPlayingVideo])
-
-  // Automatic redirect if already logged in prior to visiting /login
-  if (user && !isAnimating) {
-    return <Navigate to={user.role === 'admin' ? '/admin/round-control' : '/'} replace />
-  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -179,6 +174,46 @@ export default function LoginPage() {
           <p style={{ fontFamily:'var(--font-heading)', fontSize:'0.72rem', letterSpacing:'0.2em', color:'#34d399', textTransform:'uppercase', marginBottom:'24px', textAlign:'center', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' }}>
             Welcome to the Doom's World
           </p>
+
+          {/* Active Session Notification / Switcher */}
+          {user && (
+            <div
+              style={{
+                padding: '12px 14px',
+                background: 'rgba(16, 185, 129, 0.1)',
+                border: '1px solid rgba(16, 185, 129, 0.35)',
+                borderRadius: '12px',
+                marginBottom: '20px',
+                fontSize: '0.8rem',
+                textAlign: 'center',
+              }}
+            >
+              <div style={{ color: '#34d399', marginBottom: '8px' }}>
+                Active session: <strong>{user.teamName || user.name || user.username}</strong> ({user.role === 'admin' ? 'Admin' : 'Participant'})
+              </div>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => navigate(user.role === 'admin' ? '/admin/round-control' : '/')}
+                  style={{ fontSize: '0.72rem', padding: '4px 10px', background: '#10b981', color: '#000', fontWeight: 700 }}
+                >
+                  Continue →
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={async () => {
+                    await logout()
+                    toast.info('Signed out. Ready for new login.')
+                  }}
+                  style={{ fontSize: '0.72rem', padding: '4px 10px' }}
+                >
+                  Sign Out / Switch
+                </button>
+              </div>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:'20px' }}>
             <div className="form-group">
