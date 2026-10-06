@@ -397,30 +397,32 @@ const evaluateRound3Question = async (q, code, lang) => {
   const sampleTarget = (normalizedLang === 'java' ? q.java?.answer : q.python?.answer) ||
                        q.expectedOutput || q.correctOutput || q.correctAnswer || '';
 
-  const sampleResult = await executeCode(rawCode, normalizedLang, { input: sampleInput });
-  const samplePassed = isOutputMatch(sampleResult.output, sampleTarget);
-
   // Hidden Test Case 1
   const hiddenInput1 = (normalizedLang === 'java' ? q.java?.hiddenInput : q.python?.hiddenInput) || q.hiddenInput || '';
   const hiddenTarget1 = (normalizedLang === 'java' ? q.java?.hiddenAnswer : q.python?.hiddenAnswer) || q.hiddenExpectedOutput || '';
-
-  let hiddenPassed1 = true;
-  let hiddenResult1 = { executionTimeMs: 0 };
-  if (hiddenTarget1) {
-    hiddenResult1 = await executeCode(rawCode, normalizedLang, { input: hiddenInput1 });
-    hiddenPassed1 = isOutputMatch(hiddenResult1.output, hiddenTarget1);
-  }
 
   // Hidden Test Case 2
   const hiddenInput2 = (normalizedLang === 'java' ? q.java?.hiddenInput2 : q.python?.hiddenInput2) || '';
   const hiddenTarget2 = (normalizedLang === 'java' ? q.java?.hiddenAnswer2 : q.python?.hiddenAnswer2) || '';
 
-  let hiddenPassed2 = true;
-  let hiddenResult2 = { executionTimeMs: 0 };
-  if (hiddenTarget2) {
-    hiddenResult2 = await executeCode(rawCode, normalizedLang, { input: hiddenInput2 });
-    hiddenPassed2 = isOutputMatch(hiddenResult2.output, hiddenTarget2);
-  }
+  // Execute all test cases in parallel for speed
+  const samplePromise = executeCode(rawCode, normalizedLang, { input: sampleInput, timeoutMs: 10000 });
+  const hidden1Promise = hiddenTarget1
+    ? executeCode(rawCode, normalizedLang, { input: hiddenInput1, timeoutMs: 10000 })
+    : Promise.resolve({ success: true, output: '', executionTimeMs: 0 });
+  const hidden2Promise = hiddenTarget2
+    ? executeCode(rawCode, normalizedLang, { input: hiddenInput2, timeoutMs: 10000 })
+    : Promise.resolve({ success: true, output: '', executionTimeMs: 0 });
+
+  const [sampleResult, hiddenResult1, hiddenResult2] = await Promise.all([
+    samplePromise,
+    hidden1Promise,
+    hidden2Promise,
+  ]);
+
+  const samplePassed = isOutputMatch(sampleResult.output, sampleTarget);
+  const hiddenPassed1 = !hiddenTarget1 || isOutputMatch(hiddenResult1.output, hiddenTarget1);
+  const hiddenPassed2 = !hiddenTarget2 || isOutputMatch(hiddenResult2.output, hiddenTarget2);
 
   // Anti-hardcoding input dependency check
   let inputDependencyPassed = true;

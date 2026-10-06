@@ -43,7 +43,7 @@ function isOutputMatch(actual, expected) {
  * Fallback remote execution using high-performance sandbox (Wandbox API)
  * Triggered automatically when local toolchain binaries (javac, python, gcc) are missing (e.g. in Vercel serverless)
  */
-function runRemoteCode(compiler, code, input = '', timeoutMs = 9000) {
+function runRemoteCode(compiler, code, input = '', timeoutMs = 12000) {
   return new Promise((resolve) => {
     let sanitizedCode = code;
     if (compiler.includes('openjdk')) {
@@ -114,7 +114,7 @@ function runRemoteCode(compiler, code, input = '', timeoutMs = 9000) {
  * @returns {Promise<{ success: boolean, output: string, error: string|null, executionTimeMs: number }>}
  */
 async function executeCode(code, language = 'javascript', options = {}) {
-  const timeoutMs = options.timeoutMs || 4000;
+  const timeoutMs = options.timeoutMs || 8000;
   const lang = (language || 'javascript').toLowerCase().trim();
 
   // Create isolated temp directory
